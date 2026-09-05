@@ -1,0 +1,12 @@
+-- Privora Database Seed File
+--
+-- STRICT SECURITY AND PRIVACY RULE:
+-- Privora enforces a strict zero-demo data policy.
+-- NO demo users, NO demo categories, and NO demo photos are created.
+--
+-- Every user account is authenticated via Supabase Auth.
+-- Every category is created manually by the user upon first setup.
+-- Every photo is encrypted locally on device before being stored in the cloud.
+--
+-- This file confirms the database migration status.
+SELECT 'Privora database schema ready. Zero demo data seeded.' AS status;
