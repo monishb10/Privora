@@ -53,13 +53,24 @@ class VaultCategory {
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
+      if (id.isNotEmpty) 'id': id,
       'user_id': userId,
       'name': name,
       'color_value': colorValue,
       'cover_photo_id': coverPhotoId,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> toInsertMap({String? userId}) {
+    return {
+      if (id.isNotEmpty) 'id': id,
+      'user_id': userId ?? this.userId,
+      'name': name,
+      'color_value': colorValue,
+      if (coverPhotoId != null && coverPhotoId!.isNotEmpty)
+        'cover_photo_id': coverPhotoId,
     };
   }
 

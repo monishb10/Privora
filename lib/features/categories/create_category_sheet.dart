@@ -1,6 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/providers.dart';
+import '../../core/config/supabase_config.dart';
+import '../../core/errors/app_exception.dart';
+import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/validators.dart';
@@ -38,7 +43,23 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
   }
 
   Future<void> _handleCreate() async {
+    // Prevent multiple insert requests when button is tapped repeatedly
+    if (_isLoading) return;
+
     if (!_formKey.currentState!.validate()) return;
+
+    // Verify valid Supabase authenticated user before starting request
+    final authUser = ref.read(currentUserProvider) ??
+        (SupabaseConfig.isInitialized
+            ? Supabase.instance.client.auth.currentUser
+            : null);
+
+    if (authUser == null || authUser.id.isEmpty) {
+      setState(() {
+        _errorMessage = 'Session expired. Please sign in again.';
+      });
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -46,27 +67,73 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
     });
 
     try {
-      final user = ref.read(currentUserProvider);
-      if (user == null) throw Exception('Authentication session expired.');
-
       final categoryRepo = ref.read(categoryRepositoryProvider);
       await categoryRepo.createCategory(
-        userId: user.id,
+        userId: authUser.id,
         name: _nameController.text.trim(),
         colorValue: _selectedColor.toARGB32(),
       );
 
-      // Refresh categories provider
+      // Local state is already updated in categoryRepo.
+      // Refresh local provider immediately so UI reflects the newly added category.
       ref.invalidate(categoriesProvider);
 
       if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop(true);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Category created'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Refresh categories silently in the background afterward
+      unawaited(
+        categoryRepo.getCategories(authUser.id, forceRefresh: true).then((_) {
+          ref.invalidate(categoriesProvider);
+        }).catchError((err) {
+          debugPrint('Background category refresh error: $err');
+        }),
+      );
+    } on TimeoutException catch (e) {
+      debugPrint('createCategory TimeoutException: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage =
+              'Request timed out. Please check your network connection.';
+        });
+      }
+    } on PostgrestException catch (e) {
+      debugPrint(
+        'createCategory PostgrestException: code=${e.code}, message=${e.message}, details=${e.details}, hint=${e.hint}',
+      );
+      if (mounted) {
+        setState(() {
+          _errorMessage = ErrorMapper.mapToUserMessage(e);
+        });
+      }
+    } on AppException catch (e) {
+      debugPrint('createCategory AppException: ${e.message}');
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.message;
+        });
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString();
-        _isLoading = false;
-      });
+      debugPrint('createCategory error: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = ErrorMapper.mapToUserMessage(e);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

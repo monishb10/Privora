@@ -52,6 +52,31 @@ void main() {
       expect(updated.photoCount, 10);
       expect(updated.id, 'cat-1');
     });
+
+    test('omits empty id from toJson and toInsertMap so database default uuid generates safely', () {
+      final now = DateTime.now();
+      final newCategory = VaultCategory(
+        id: '',
+        userId: 'user-auth-123',
+        name: 'Documents',
+        colorValue: 0xFF123456,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final json = newCategory.toJson();
+      expect(json.containsKey('id'), isFalse);
+      expect(json['user_id'], 'user-auth-123');
+      expect(json['name'], 'Documents');
+      expect(json['color_value'], 0xFF123456);
+
+      final insertMap = newCategory.toInsertMap();
+      expect(insertMap.containsKey('id'), isFalse);
+      expect(insertMap['user_id'], 'user-auth-123');
+      expect(insertMap['name'], 'Documents');
+      expect(insertMap['color_value'], 0xFF123456);
+      expect(insertMap.containsKey('cover_photo_id'), isFalse);
+    });
   });
 
   group('VaultPhoto & Recently Deleted Calculation Tests', () {

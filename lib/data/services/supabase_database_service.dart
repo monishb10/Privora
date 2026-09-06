@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import '../../core/config/supabase_config.dart';
@@ -142,26 +143,66 @@ class SupabaseDatabaseService {
 
   Future<VaultCategory> createCategory(VaultCategory category) async {
     try {
+      final authUser = _client.auth.currentUser;
+      final currentUserId = authUser?.id ?? category.userId;
+      if (authUser == null && currentUserId.isEmpty) {
+        throw const StorageException('Session expired. Please sign in again.');
+      }
+
+      final insertData = <String, dynamic>{
+        if (category.id.isNotEmpty) 'id': category.id,
+        'user_id': currentUserId,
+        'name': category.name,
+        'color_value': category.colorValue,
+        if (category.coverPhotoId != null && category.coverPhotoId!.isNotEmpty)
+          'cover_photo_id': category.coverPhotoId,
+      };
+
       final inserted = await _client
           .from(StorageConstants.tableCategories)
-          .insert(category.toJson())
+          .insert(insertData)
           .select()
-          .single();
+          .single()
+          .timeout(const Duration(seconds: 10));
 
       return VaultCategory.fromJson(inserted);
+    } on TimeoutException catch (e) {
+      debugPrint('createCategory timeout: $e');
+      throw const StorageException(
+        'Request timed out. Please check your network connection.',
+      );
+    } on sp.PostgrestException catch (e) {
+      debugPrint(
+        'createCategory PostgrestException: code=${e.code}, message=${e.message}, details=${e.details}, hint=${e.hint}',
+      );
+      throw StorageException(ErrorMapper.mapToUserMessage(e));
     } catch (e) {
       debugPrint('createCategory error: $e');
+      if (e is AppException) rethrow;
       throw StorageException(ErrorMapper.mapToUserMessage(e));
     }
   }
 
   Future<void> updateCategory(VaultCategory category) async {
     try {
+      final currentUserId = sp.Supabase.instance.client.auth.currentUser!.id;
+      final updateData = <String, dynamic>{
+        'name': category.name,
+        'color_value': category.colorValue,
+        'cover_photo_id': category.coverPhotoId,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
       await _client
           .from(StorageConstants.tableCategories)
-          .update(category.toJson())
+          .update(updateData)
           .eq('id', category.id)
-          .eq('user_id', category.userId);
+          .eq('user_id', currentUserId);
+    } on sp.PostgrestException catch (e) {
+      debugPrint(
+        'updateCategory PostgrestException: code=${e.code}, message=${e.message}, details=${e.details}, hint=${e.hint}',
+      );
+      throw StorageException(ErrorMapper.mapToUserMessage(e));
     } catch (e) {
       debugPrint('updateCategory error: $e');
       throw StorageException(ErrorMapper.mapToUserMessage(e));

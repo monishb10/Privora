@@ -180,6 +180,12 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             color: AppColors.primaryAccent,
             backgroundColor: AppColors.surface,
             onRefresh: () async {
+              final user = ref.read(currentUserProvider);
+              if (user != null) {
+                await ref
+                    .read(categoryRepositoryProvider)
+                    .getCategories(user.id, forceRefresh: true);
+              }
               ref.invalidate(categoriesProvider);
             },
             child: GridView.builder(

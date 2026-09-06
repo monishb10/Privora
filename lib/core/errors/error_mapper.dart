@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import 'app_exception.dart';
 
@@ -9,6 +11,10 @@ class ErrorMapper {
   static String mapToUserMessage(dynamic error) {
     if (error is AppException) {
       return error.message;
+    }
+
+    if (error is TimeoutException) {
+      return 'Request timed out. Please check your network connection.';
     }
 
     if (error is SocketException) {
@@ -28,13 +34,27 @@ class ErrorMapper {
       if (msg.contains('rate limit')) {
         return 'Too many requests. Please wait a moment and try again.';
       }
+      if (msg.contains('jwt') || msg.contains('session') || msg.contains('expired')) {
+        return 'Session expired. Please sign in again.';
+      }
       return 'Authentication failed. Please verify your credentials.';
     }
 
     if (error is sp.PostgrestException) {
+      debugPrint(
+        'PostgrestException caught: '
+        'code=${error.code}, '
+        'message=${error.message}, '
+        'details=${error.details}, '
+        'hint=${error.hint}',
+      );
       final code = error.code;
-      if (code == '42501' || error.message.contains('row-level security')) {
+      final msg = error.message.toLowerCase();
+      if (code == '42501' || msg.contains('row-level security')) {
         return 'Access denied. You do not have permission for this action.';
+      }
+      if (code == 'PGRST301' || msg.contains('jwt') || msg.contains('expired') || msg.contains('session')) {
+        return 'Session expired. Please sign in again.';
       }
       return 'Database operation could not be completed. Please try again.';
     }

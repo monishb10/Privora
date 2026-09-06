@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Privora (Supabase)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=SUPABASE_URL=https://crpglfjxrxnmfgssijcq.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=sb_publishable_qdgGSBhS8Dzi2Jl-XZgo4w_4mwsR9sl",
+        "--dart-define=ENABLE_GOOGLE_LOGIN=false"
+      ]
+    }
+  ]
+}
