@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/privora_button.dart';
+import '../../core/widgets/privora_logo.dart';
 
 /// Onboarding Welcome screen for first-time visitors.
 class WelcomeScreen extends StatelessWidget {
@@ -55,20 +56,7 @@ class WelcomeScreen extends StatelessWidget {
               // App Logo & Header
               Row(
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.elevatedSurface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      color: AppColors.primaryAccent,
-                      size: 24,
-                    ),
-                  ),
+                  const PrivoraLogo(size: 42, showShadow: false),
                   const SizedBox(width: 12),
                   const Text(
                     AppConstants.appName,

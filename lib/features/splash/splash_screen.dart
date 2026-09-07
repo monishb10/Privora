@@ -5,9 +5,11 @@ import '../../app/providers.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/privora_logo.dart';
 
 /// App launch splash screen.
-/// Validates Supabase authentication session and routes to Welcome, Unlock, or PIN setup.
+/// Minimal appearance with #F7FCFF background, centered Privora logo,
+/// app name, and official tagline. Validates Supabase session and routes cleanly.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,19 +21,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
-  late Animation<double> _scaleAnim;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 600),
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
-    _scaleAnim = Tween<double>(begin: 0.9, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-    );
 
     _animController.forward();
     _checkInitialRoute();
@@ -47,8 +45,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // 1. Startup disk hygiene: clean any leftover unencrypted files
     await ref.read(temporaryFileCleanerProvider).cleanTemporaryFiles();
 
-    // Small delay to allow branding presentation
-    await Future.delayed(const Duration(milliseconds: 1200));
+    // Minimal delay for smooth brand presentation without artificial wait
+    await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
 
     final authRepo = ref.read(authRepositoryProvider);
@@ -79,61 +77,39 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.mainBackground,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnim,
-          child: ScaleTransition(
-            scale: _scaleAnim,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    color: AppColors.elevatedSurface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.border, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primaryAccent.withValues(alpha: 0.15),
-                        blurRadius: 30,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.shield_outlined,
-                      size: 44,
-                      color: AppColors.primaryAccent,
-                    ),
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const PrivoraLogo(size: 96),
+              const SizedBox(height: 20),
+              const Text(
+                AppConstants.appName,
+                style: AppTypography.displayLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppConstants.appTagline,
+                style: AppTypography.titleSmall.copyWith(
+                  color: AppColors.secondaryTextColor,
+                  fontWeight: FontWeight.w500,
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  AppConstants.appName,
-                  style: AppTypography.displayLarge,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  AppConstants.appTagline,
-                  style: AppTypography.titleSmall,
-                ),
-                const SizedBox(height: 48),
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      AppColors.primaryAccent,
-                    ),
+              ),
+              const SizedBox(height: 40),
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryActionBlue,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

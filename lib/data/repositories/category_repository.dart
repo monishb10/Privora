@@ -13,7 +13,7 @@ class CategoryRepository {
   List<VaultCategory>? _cachedCategories;
 
   CategoryRepository({required this.databaseService, Uuid? uuid})
-      : uuid = uuid ?? const Uuid();
+    : uuid = uuid ?? const Uuid();
 
   List<VaultCategory>? get cachedCategories => _cachedCategories;
 
@@ -24,7 +24,11 @@ class CategoryRepository {
     if (_cachedCategories != null && !forceRefresh) {
       return _cachedCategories!;
     }
-    final categories = await databaseService.getCategories(userId);
+    final effectiveUserId =
+        SupabaseConfig.client?.auth.currentUser?.id ?? userId;
+    final categories = await databaseService
+        .getCategories(effectiveUserId)
+        .timeout(const Duration(seconds: 10));
     _cachedCategories = categories;
     return categories;
   }
@@ -45,8 +49,9 @@ class CategoryRepository {
 
   void removeCategoryLocally(String categoryId) {
     if (_cachedCategories == null) return;
-    _cachedCategories =
-        _cachedCategories!.where((c) => c.id != categoryId).toList();
+    _cachedCategories = _cachedCategories!
+        .where((c) => c.id != categoryId)
+        .toList();
   }
 
   void clearCache() {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/theme/app_colors.dart';
 import '../data/models/vault_category.dart';
 import '../features/account/account_screen.dart';
 import '../features/account/security_settings_screen.dart';
@@ -145,38 +146,45 @@ class _MainScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: navigationShell.currentIndex,
-        onTap: (index) {
-          if (index == 1) {
-            // Central camera action: opens camera directly
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const PrivateCameraScreen(),
-              ),
-            );
-          } else {
-            navigationShell.goBranch(index);
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
-            label: 'Categories',
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: AppColors.borderDivider, width: 1),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.camera_alt_rounded),
-            label: 'Camera',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.delete_outline_rounded),
-            label: 'Trash',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shield_outlined),
-            label: 'Account',
-          ),
-        ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: navigationShell.currentIndex,
+          onTap: (index) {
+            if (index == 1) {
+              // Central camera action: opens camera directly
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PrivateCameraScreen(),
+                ),
+              );
+            } else {
+              navigationShell.goBranch(index);
+            }
+          },
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded),
+              label: 'Categories',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.camera_alt_rounded),
+              label: 'Camera',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.delete_outline_rounded),
+              label: 'Trash',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.shield_outlined),
+              label: 'Account',
+            ),
+          ],
+        ),
       ),
     );
   }

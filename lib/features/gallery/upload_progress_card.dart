@@ -19,12 +19,12 @@ class UploadProgressCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.elevatedSurface,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.borderDivider),
         boxShadow: const [
           BoxShadow(
-            color: Colors.black38,
+            color: AppColors.cardShadow,
             blurRadius: 10,
             offset: Offset(0, 4),
           ),

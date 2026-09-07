@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/privora_button.dart';
+import '../../core/widgets/privora_logo.dart';
 
 /// Screen allowing users to request a password reset email.
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
@@ -84,6 +85,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const PrivoraLogo(size: 56),
+          const SizedBox(height: 20),
           const Text('Reset Password', style: AppTypography.displayLarge),
           const SizedBox(height: 8),
           const Text(

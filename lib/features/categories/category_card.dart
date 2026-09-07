@@ -84,19 +84,24 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: catColor.withValues(alpha: 0.35), width: 1.2),
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: _coverBytes != null
+              ? catColor.withValues(alpha: 0.35)
+              : AppColors.borderDivider,
+          width: 1.2,
+        ),
       ),
       child: InkWell(
         onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: AppColors.cardSurface,
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [catColor.withValues(alpha: 0.18), AppColors.surface],
+              colors: [catColor.withValues(alpha: 0.12), AppColors.cardSurface],
             ),
           ),
           child: Stack(
@@ -115,31 +120,36 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        AppColors.primaryAccent,
+                        AppColors.primaryActionBlue,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Center(
+                  child: Icon(
+                    Icons.folder_rounded,
+                    size: 46,
+                    color: catColor.withValues(alpha: 0.75),
+                  ),
+                ),
+
+              // Gradient darkener only over cover image so text is readable
+              if (_coverBytes != null)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.25),
+                          Colors.black.withValues(alpha: 0.85),
+                        ],
                       ),
                     ),
                   ),
                 ),
-
-              // Gradient darkener over cover image so text is always crisp
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(
-                          alpha: _coverBytes != null ? 0.3 : 0.0,
-                        ),
-                        Colors.black.withValues(
-                          alpha: _coverBytes != null ? 0.85 : 0.6,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
 
               // Category color indicator bar at top
               Positioned(
@@ -155,15 +165,17 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
                 top: 6,
                 right: 4,
                 child: PopupMenuButton<String>(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.more_vert_rounded,
                     size: 20,
-                    color: AppColors.mainText,
+                    color: _coverBytes != null
+                        ? Colors.white
+                        : AppColors.primaryText,
                   ),
-                  color: AppColors.elevatedSurface,
+                  color: AppColors.cardSurface,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: AppColors.borderDivider),
                   ),
                   onSelected: (val) {
                     if (val == 'edit') widget.onEdit();
@@ -220,7 +232,9 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
                     Text(
                       widget.category.name,
                       style: AppTypography.titleMedium.copyWith(
-                        color: AppColors.mainText,
+                        color: _coverBytes != null
+                            ? Colors.white
+                            : AppColors.primaryText,
                         fontWeight: FontWeight.w700,
                       ),
                       maxLines: 1,
@@ -232,16 +246,20 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
                         Text(
                           '${widget.category.photoCount} ${widget.category.photoCount == 1 ? 'photo' : 'photos'}',
                           style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.secondaryText,
+                            color: _coverBytes != null
+                                ? Colors.white70
+                                : AppColors.secondaryTextColor,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         if (widget.category.latestPhotoDate != null) ...[
                           const SizedBox(width: 6),
-                          const Text(
+                          Text(
                             '•',
                             style: TextStyle(
-                              color: AppColors.secondaryText,
+                              color: _coverBytes != null
+                                  ? Colors.white70
+                                  : AppColors.secondaryTextColor,
                               fontSize: 10,
                             ),
                           ),
@@ -252,7 +270,9 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
                                 widget.category.latestPhotoDate!,
                               ),
                               style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.secondaryText,
+                                color: _coverBytes != null
+                                    ? Colors.white70
+                                    : AppColors.secondaryTextColor,
                                 fontSize: 11,
                               ),
                               maxLines: 1,

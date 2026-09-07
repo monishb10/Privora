@@ -37,7 +37,7 @@ class StorageUsageScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Column(
@@ -121,8 +121,8 @@ class StorageUsageScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.elevatedSurface,
-                    borderRadius: BorderRadius.circular(14),
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Column(

@@ -145,7 +145,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Row(
@@ -195,7 +195,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Column(
@@ -252,7 +252,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Column(
@@ -290,7 +290,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Column(

@@ -32,24 +32,26 @@ class PinDots extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: hasError
-                ? AppColors.danger
+                ? AppColors.errorDestructive
                 : isFilled
-                ? AppColors.primaryAccent
+                ? AppColors.primaryActionBlue
                 : Colors.transparent,
             border: Border.all(
               color: hasError
-                  ? AppColors.danger
+                  ? AppColors.errorDestructive
                   : isFilled
-                  ? AppColors.primaryAccent
-                  : AppColors.secondaryText.withValues(alpha: 0.5),
-              width: 2,
+                  ? AppColors.primaryActionBlue
+                  : AppColors.borderDivider,
+              width: 1.5,
             ),
             boxShadow: isFilled && !hasError
                 ? [
                     BoxShadow(
-                      color: AppColors.primaryAccent.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      spreadRadius: 1,
+                      color: AppColors.primaryActionBlue.withValues(
+                        alpha: 0.15,
+                      ),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
                     ),
                   ]
                 : null,

@@ -335,8 +335,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primaryAccent,
-        foregroundColor: AppColors.background,
+        backgroundColor: AppColors.primaryActionBlue,
+        foregroundColor: Colors.white,
         onPressed: _showAddPhotoOptions,
         child: const Icon(Icons.add_rounded, size: 28),
       ),

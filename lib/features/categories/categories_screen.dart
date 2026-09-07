@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/confirmation_dialog.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/error_view.dart';
+import '../../core/widgets/privora_logo.dart';
 import '../../data/models/vault_category.dart';
 import 'category_card.dart';
 import 'create_category_sheet.dart';
@@ -27,10 +30,36 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
+  bool _isRetrying = false;
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleRetry() async {
+    if (_isRetrying) return;
+    setState(() => _isRetrying = true);
+
+    try {
+      final user =
+          ref.read(currentUserProvider) ??
+          SupabaseConfig.client?.auth.currentUser;
+      if (user != null) {
+        await ref
+            .read(categoryRepositoryProvider)
+            .getCategories(user.id, forceRefresh: true)
+            .timeout(const Duration(seconds: 10));
+      }
+      ref.invalidate(categoriesProvider);
+    } catch (_) {
+      ref.invalidate(categoriesProvider);
+    } finally {
+      if (mounted) {
+        setState(() => _isRetrying = false);
+      }
+    }
   }
 
   Future<void> _handleDeleteCategory(VaultCategory category) async {
@@ -96,20 +125,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
               )
             : Row(
                 children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: AppColors.elevatedSurface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      size: 18,
-                      color: AppColors.primaryAccent,
-                    ),
-                  ),
+                  const PrivoraLogo(size: 32, showShadow: false),
                   const SizedBox(width: 10),
                   const Text(
                     AppConstants.appName,
@@ -143,93 +159,102 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           ),
         ],
       ),
-      body: categoriesAsync.when(
-        data: (categories) {
-          // Zero-demo check: If no categories exist, display the required empty state
-          if (categories.isEmpty) {
-            return EmptyState(
-              icon: Icons.create_new_folder_outlined,
-              title: 'No categories yet',
-              subtitle: 'Create your first private collection.',
-              actionText: 'Create Category',
-              onAction: () => CreateCategorySheet.show(context),
-            );
-          }
+      body: _isRetrying
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryActionBlue,
+                ),
+              ),
+            )
+          : categoriesAsync.when(
+              data: (categories) {
+                // Zero-demo check: If no categories exist, display the required empty state
+                if (categories.isEmpty) {
+                  return EmptyState(
+                    icon: Icons.create_new_folder_outlined,
+                    title: 'No categories yet',
+                    subtitle: 'Create your first private collection.',
+                    actionText: 'Create Category',
+                    onAction: () => CreateCategorySheet.show(context),
+                  );
+                }
 
-          final filtered = _searchQuery.isEmpty
-              ? categories
-              : categories
-                    .where((c) => c.name.toLowerCase().contains(_searchQuery))
-                    .toList();
+                final filtered = _searchQuery.isEmpty
+                    ? categories
+                    : categories
+                          .where(
+                            (c) => c.name.toLowerCase().contains(_searchQuery),
+                          )
+                          .toList();
 
-          if (filtered.isEmpty && _searchQuery.isNotEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Text(
-                  'No categories found matching "$_searchQuery"',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.secondaryText,
+                if (filtered.isEmpty && _searchQuery.isNotEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Text(
+                        'No categories found matching "$_searchQuery"',
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                return RefreshIndicator(
+                  color: AppColors.primaryActionBlue,
+                  backgroundColor: AppColors.cardSurface,
+                  onRefresh: _handleRetry,
+                  child: GridView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: 0.95,
+                        ),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final category = filtered[index];
+                      return CategoryCard(
+                        category: category,
+                        onTap: () => context.push(
+                          '/category/${category.id}',
+                          extra: category,
+                        ),
+                        onEdit: () => EditCategorySheet.show(context, category),
+                        onDelete: () => _handleDeleteCategory(category),
+                      );
+                    },
+                  ),
+                );
+              },
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryActionBlue,
                   ),
                 ),
               ),
-            );
-          }
-
-          return RefreshIndicator(
-            color: AppColors.primaryAccent,
-            backgroundColor: AppColors.surface,
-            onRefresh: () async {
-              final user = ref.read(currentUserProvider);
-              if (user != null) {
-                await ref
-                    .read(categoryRepositoryProvider)
-                    .getCategories(user.id, forceRefresh: true);
-              }
-              ref.invalidate(categoriesProvider);
-            },
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              physics: const AlwaysScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                childAspectRatio: 0.95,
+              error: (err, _) => ErrorView(
+                message: ErrorMapper.mapToUserMessage(err),
+                onRetry: _isRetrying ? null : _handleRetry,
               ),
-              itemCount: filtered.length,
-              itemBuilder: (context, index) {
-                final category = filtered[index];
-                return CategoryCard(
-                  category: category,
-                  onTap: () =>
-                      context.push('/category/${category.id}', extra: category),
-                  onEdit: () => EditCategorySheet.show(context, category),
-                  onDelete: () => _handleDeleteCategory(category),
-                );
-              },
             ),
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryAccent),
-          ),
-        ),
-        error: (err, _) => ErrorView(
-          message: err.toString(),
-          onRetry: () => ref.invalidate(categoriesProvider),
-        ),
-      ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primaryAccent,
-        foregroundColor: AppColors.background,
-        elevation: 4,
+        backgroundColor: AppColors.primaryActionBlue,
+        foregroundColor: Colors.white,
+        elevation: 3,
         icon: const Icon(Icons.add_rounded, size: 22),
         label: Text(
           'New Category',
           style: AppTypography.labelLarge.copyWith(
-            color: AppColors.background,
+            color: Colors.white,
             fontWeight: FontWeight.w700,
           ),
         ),

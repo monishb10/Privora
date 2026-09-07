@@ -49,7 +49,8 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
     if (!_formKey.currentState!.validate()) return;
 
     // Verify valid Supabase authenticated user before starting request
-    final authUser = ref.read(currentUserProvider) ??
+    final authUser =
+        ref.read(currentUserProvider) ??
         (SupabaseConfig.isInitialized
             ? Supabase.instance.client.auth.currentUser
             : null);
@@ -91,11 +92,14 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
 
       // Refresh categories silently in the background afterward
       unawaited(
-        categoryRepo.getCategories(authUser.id, forceRefresh: true).then((_) {
-          ref.invalidate(categoriesProvider);
-        }).catchError((err) {
-          debugPrint('Background category refresh error: $err');
-        }),
+        categoryRepo
+            .getCategories(authUser.id, forceRefresh: true)
+            .then((_) {
+              ref.invalidate(categoriesProvider);
+            })
+            .catchError((err) {
+              debugPrint('Background category refresh error: $err');
+            }),
       );
     } on TimeoutException catch (e) {
       debugPrint('createCategory TimeoutException: $e');

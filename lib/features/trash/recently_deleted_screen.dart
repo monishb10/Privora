@@ -273,7 +273,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                           IconButton(
                             icon: const Icon(
                               Icons.restore_rounded,
-                              color: AppColors.secondaryAccent,
+                              color: AppColors.primaryActionBlue,
                             ),
                             tooltip: 'Restore Photo',
                             onPressed: () => _handleRestore(photo),

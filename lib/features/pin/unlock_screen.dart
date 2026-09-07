@@ -8,6 +8,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/privora_logo.dart';
 import 'widgets/pin_keyboard.dart';
 
 /// Everyday application unlock screen.
@@ -201,31 +202,30 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                           ),
                         ),
                         const Spacer(flex: 1),
-                        Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: AppColors.elevatedSurface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _hasError
-                                  ? AppColors.danger
-                                  : AppColors.border,
-                              width: 1.5,
+                        if (isLockedOut)
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: AppColors.errorDestructive.withValues(
+                                alpha: 0.1,
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.errorDestructive,
+                                width: 1.5,
+                              ),
                             ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              isLockedOut
-                                  ? Icons.lock_clock_outlined
-                                  : Icons.lock_outline_rounded,
-                              size: 34,
-                              color: _hasError || isLockedOut
-                                  ? AppColors.danger
-                                  : AppColors.primaryAccent,
+                            child: const Center(
+                              child: Icon(
+                                Icons.lock_clock_outlined,
+                                size: 34,
+                                color: AppColors.errorDestructive,
+                              ),
                             ),
-                          ),
-                        ),
+                          )
+                        else
+                          const PrivoraLogo(size: 76),
                         const SizedBox(height: 24),
                         const Text(
                           'Enter 6-Digit PIN',

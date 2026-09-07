@@ -5,6 +5,7 @@ import '../../app/providers.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/privora_logo.dart';
 import 'widgets/pin_keyboard.dart';
 
 enum ChangePinStep { enterCurrent, enterNew, confirmNew }
@@ -148,20 +149,7 @@ class _ChangePinScreenState extends ConsumerState<ChangePinScreen> {
                   child: Column(
                     children: [
                       const Spacer(flex: 1),
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: AppColors.elevatedSurface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Icon(
-                          Icons.password_rounded,
-                          size: 30,
-                          color: AppColors.primaryAccent,
-                        ),
-                      ),
+                      const PrivoraLogo(size: 68),
                       const SizedBox(height: 24),
                       Text(
                         _title,

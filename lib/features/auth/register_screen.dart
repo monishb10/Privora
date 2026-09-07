@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/privora_button.dart';
+import '../../core/widgets/privora_logo.dart';
 
 /// Screen allowing new users to create their account.
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -118,6 +119,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const PrivoraLogo(size: 56),
+                const SizedBox(height: 20),
                 const Text('Create Account', style: AppTypography.displayLarge),
                 const SizedBox(height: 8),
                 const Text(

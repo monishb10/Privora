@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/privora_logo.dart';
 import 'widgets/pin_keyboard.dart';
 
 /// Screen where the user initiates setting up a new 6-digit PIN.
@@ -66,20 +67,7 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
                   child: Column(
                     children: [
                       const Spacer(flex: 1),
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: AppColors.elevatedSurface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Icon(
-                          Icons.pin_outlined,
-                          size: 32,
-                          color: AppColors.primaryAccent,
-                        ),
-                      ),
+                      const PrivoraLogo(size: 72),
                       const SizedBox(height: 24),
                       const Text(
                         'Create 6-Digit PIN',

@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/privora_button.dart';
+import '../../core/widgets/privora_logo.dart';
 
 /// Screen allowing recovery of encrypted vault master key using the single-use recovery code.
 class RecoverVaultScreen extends ConsumerStatefulWidget {
@@ -94,19 +95,7 @@ class _RecoverVaultScreenState extends ConsumerState<RecoverVaultScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.restore_page_outlined,
-                    color: AppColors.primaryAccent,
-                    size: 28,
-                  ),
-                ),
+                const PrivoraLogo(size: 56),
                 const SizedBox(height: 20),
                 const Text('Vault Recovery', style: AppTypography.displayLarge),
                 const SizedBox(height: 8),

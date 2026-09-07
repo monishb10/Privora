@@ -35,25 +35,25 @@ class PrivoraButton extends StatelessWidget {
 
     switch (variant) {
       case PrivoraButtonVariant.primary:
-        backgroundColor = AppColors.primaryAccent;
-        foregroundColor = AppColors.background;
+        backgroundColor = AppColors.primaryActionBlue;
+        foregroundColor = Colors.white;
         break;
       case PrivoraButtonVariant.secondary:
-        backgroundColor = AppColors.elevatedSurface;
-        foregroundColor = AppColors.mainText;
-        borderSide = const BorderSide(color: AppColors.border, width: 1);
+        backgroundColor = AppColors.softBlueSurface;
+        foregroundColor = AppColors.primaryActionBlue;
+        borderSide = const BorderSide(color: AppColors.borderDivider, width: 1);
         break;
       case PrivoraButtonVariant.danger:
-        backgroundColor = AppColors.danger.withValues(alpha: 0.15);
-        foregroundColor = AppColors.danger;
+        backgroundColor = AppColors.errorDestructive.withValues(alpha: 0.1);
+        foregroundColor = AppColors.errorDestructive;
         borderSide = BorderSide(
-          color: AppColors.danger.withValues(alpha: 0.4),
+          color: AppColors.errorDestructive.withValues(alpha: 0.3),
           width: 1,
         );
         break;
       case PrivoraButtonVariant.text:
         backgroundColor = Colors.transparent;
-        foregroundColor = AppColors.primaryAccent;
+        foregroundColor = AppColors.primaryActionBlue;
         break;
     }
 
@@ -66,14 +66,14 @@ class PrivoraButton extends StatelessWidget {
         color: isInteractive
             ? backgroundColor
             : backgroundColor.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: isInteractive ? onPressed : null,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               border: borderSide != null
                   ? Border.fromBorderSide(borderSide)
                   : null,

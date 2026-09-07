@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/privora_button.dart';
+import '../../core/widgets/privora_logo.dart';
 
 /// Screen allowing users to sign in with email/password or Google.
 class LoginScreen extends ConsumerStatefulWidget {
@@ -114,6 +115,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const PrivoraLogo(size: 56),
+                const SizedBox(height: 20),
                 const Text('Sign In', style: AppTypography.displayLarge),
                 const SizedBox(height: 8),
                 const Text(

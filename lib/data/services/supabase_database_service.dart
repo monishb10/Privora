@@ -96,47 +96,92 @@ class SupabaseDatabaseService {
   // -------------------------------------------------------------
 
   Future<List<VaultCategory>> getCategories(String userId) async {
+    // 1. Verify Supabase is configured
+    final client = _client;
+
+    // 2. Verify auth.currentUser is not null before requesting categories
+    final authUser = client.auth.currentUser;
+    if (authUser == null) {
+      throw const StorageException('Session expired. Please sign in again.');
+    }
+
+    // 3. Use auth.currentUser!.id as the category user_id filter
+    final currentUserId = authUser.id;
+
     try {
-      // Fetch categories with photo counts and latest upload date
-      final data = await _client
+      // 4. Clean collection query matching 001_privora_schema.sql without ambiguous joins
+      // select().eq('user_id', currentUser.id).order('created_at')
+      final response = await client
           .from(StorageConstants.tableCategories)
-          .select('*, photos:photos(id, created_at, deleted_at)')
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+          .select()
+          .eq('user_id', currentUserId)
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 10));
+
+      // 5. Ensure query returns a List. Zero returned rows is a valid result.
+      final List<dynamic> rows = response as List<dynamic>;
+      if (rows.isEmpty) {
+        return <VaultCategory>[];
+      }
+
+      // Safe optional photo count query to populate category item badge
+      Map<String, int> photoCounts = {};
+      try {
+        final photosResponse = await client
+            .from(StorageConstants.tablePhotos)
+            .select('category_id')
+            .eq('user_id', currentUserId)
+            .isFilter('deleted_at', null)
+            .timeout(const Duration(seconds: 5));
+        for (final p in photosResponse as List<dynamic>) {
+          final catId = p['category_id'] as String?;
+          if (catId != null) {
+            photoCounts[catId] = (photoCounts[catId] ?? 0) + 1;
+          }
+        }
+      } catch (photoErr) {
+        debugPrint('Optional category photo counts query skipped: $photoErr');
+      }
 
       final List<VaultCategory> categories = [];
-      for (final item in data) {
-        final photosList = (item['photos'] as List<dynamic>?) ?? [];
-        // Filter out soft-deleted photos
-        final activePhotos = photosList
-            .where((p) => p['deleted_at'] == null)
-            .toList();
-        final count = activePhotos.length;
-
-        DateTime? latestDate;
-        if (activePhotos.isNotEmpty) {
-          activePhotos.sort(
-            (a, b) => (b['created_at'] as String).compareTo(
-              a['created_at'] as String,
-            ),
-          );
-          latestDate = DateTime.parse(
-            activePhotos.first['created_at'] as String,
-          );
-        }
-
+      for (final item in rows) {
+        final categoryMap = item as Map<String, dynamic>;
+        final catId = categoryMap['id'] as String? ?? '';
         categories.add(
           VaultCategory.fromJson(
-            item,
-            photoCount: count,
-            latestPhotoDate: latestDate,
+            categoryMap,
+            photoCount: photoCounts[catId] ?? 0,
           ),
         );
       }
 
       return categories;
-    } catch (e) {
-      debugPrint('getCategories error: $e');
+    } on TimeoutException catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('getCategories exception type: TimeoutException');
+        debugPrint('getCategories message: Request timed out after 10s: $e');
+        debugPrint('getCategories stack trace: $stackTrace');
+      }
+      throw const StorageException(
+        'Request timed out. Please check your network connection.',
+      );
+    } on sp.PostgrestException catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('getCategories exception type: ${e.runtimeType}');
+        debugPrint('getCategories PostgrestException code: ${e.code}');
+        debugPrint('getCategories PostgrestException message: ${e.message}');
+        debugPrint('getCategories PostgrestException details: ${e.details}');
+        debugPrint('getCategories PostgrestException hint: ${e.hint}');
+        debugPrint('getCategories stack trace: $stackTrace');
+      }
+      throw StorageException(ErrorMapper.mapToUserMessage(e));
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('getCategories exception type: ${e.runtimeType}');
+        debugPrint('getCategories message: $e');
+        debugPrint('getCategories stack trace: $stackTrace');
+      }
+      if (e is AppException) rethrow;
       throw StorageException(ErrorMapper.mapToUserMessage(e));
     }
   }

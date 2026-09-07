@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/config/supabase_config.dart';
 import '../core/security/pin_service.dart';
 import '../core/security/secure_key_service.dart';
 import '../core/security/session_lock_service.dart';
@@ -126,9 +127,16 @@ final currentUserProvider = Provider<User?>((ref) {
 final categoriesProvider = FutureProvider.autoDispose<List<VaultCategory>>((
   ref,
 ) async {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) return [];
-  return ref.watch(categoryRepositoryProvider).getCategories(user.id);
+  final user =
+      ref.watch(currentUserProvider) ??
+      (SupabaseConfig.isInitialized
+          ? Supabase.instance.client.auth.currentUser
+          : null);
+  if (user == null || user.id.isEmpty) return [];
+  return ref
+      .watch(categoryRepositoryProvider)
+      .getCategories(user.id)
+      .timeout(const Duration(seconds: 10));
 });
 
 final recentlyDeletedPhotosProvider =

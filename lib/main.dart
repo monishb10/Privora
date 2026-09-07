@@ -14,6 +14,16 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFFF7FCFF),
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   // Clean any temporary media leftovers from prior sessions or unexpected terminations
   final cleaner = TemporaryFileCleaner();
   await cleaner.cleanTemporaryFiles();
