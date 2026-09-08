@@ -17,7 +17,13 @@ class Environment {
   /// Flag to enable or hide Google Login
   static const bool enableGoogleLogin = bool.fromEnvironment(
     'ENABLE_GOOGLE_LOGIN',
-    defaultValue: false,
+    defaultValue: true,
+  );
+
+  /// Google Web OAuth Client ID used as serverClientId for native Google Sign-In.
+  static const String googleWebClientId = String.fromEnvironment(
+    'GOOGLE_WEB_CLIENT_ID',
+    defaultValue: '',
   );
 
   /// Checks if Supabase is configured with valid non-placeholder values

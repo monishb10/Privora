@@ -8,6 +8,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/confirmation_dialog.dart';
 import '../../core/widgets/privora_logo.dart';
 import 'widgets/pin_keyboard.dart';
 
@@ -183,11 +184,27 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                                   foregroundColor: AppColors.secondaryText,
                                 ),
                                 onPressed: () async {
-                                  await ref
-                                      .read(authRepositoryProvider)
-                                      .signOut();
-                                  if (context.mounted) {
-                                    context.go('/welcome');
+                                  final confirmed = await ConfirmationDialog.show(
+                                    context: context,
+                                    title: 'Sign Out?',
+                                    message:
+                                        'Are you sure you want to sign out? You will need your Google account and 6-digit PIN to sign back in.',
+                                    confirmText: 'Sign Out',
+                                    icon: Icons.logout_rounded,
+                                  );
+                                  if (confirmed == true && context.mounted) {
+                                    await ref
+                                        .read(authRepositoryProvider)
+                                        .signOut();
+                                    ref.invalidate(currentUserProvider);
+                                    ref.invalidate(categoriesProvider);
+                                    ref.invalidate(
+                                      recentlyDeletedPhotosProvider,
+                                    );
+                                    ref.invalidate(storageUsageProvider);
+                                    if (context.mounted) {
+                                      context.go('/login');
+                                    }
                                   }
                                 },
                               ),

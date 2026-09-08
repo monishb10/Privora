@@ -1,19 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/widgets/privora_floating_nav_bar.dart';
 import '../data/models/vault_category.dart';
 import '../features/account/account_screen.dart';
 import '../features/account/security_settings_screen.dart';
 import '../features/account/storage_usage_screen.dart';
-import '../features/auth/email_verification_screen.dart';
-import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/login_screen.dart';
-import '../features/auth/register_screen.dart';
 import '../features/camera/private_camera_screen.dart';
 import '../features/categories/categories_screen.dart';
 import '../features/categories/category_detail_screen.dart';
-import '../features/onboarding/welcome_screen.dart';
 import '../features/pin/change_pin_screen.dart';
 import '../features/pin/confirm_pin_screen.dart';
 import '../features/pin/create_pin_screen.dart';
@@ -21,34 +19,68 @@ import '../features/pin/recover_vault_screen.dart';
 import '../features/pin/unlock_screen.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/trash/recently_deleted_screen.dart';
+import 'providers.dart';
+
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
+class _AuthRefreshNotifier extends ChangeNotifier {
+  late final StreamSubscription<AuthState> _subscription;
+
+  _AuthRefreshNotifier(Stream<AuthState> stream) {
+    _subscription = stream.listen((_) {
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final authRepo = ref.watch(authRepositoryProvider);
+  final authNotifier = _AuthRefreshNotifier(authRepo.authStateChanges);
+  ref.onDispose(authNotifier.dispose);
+
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
+    refreshListenable: authNotifier,
+    redirect: (context, state) {
+      final isAuth = authRepo.isAuthenticated;
+      final loc = state.matchedLocation;
+
+      // Allow splash and login when not authenticated
+      final isPublic = loc == '/login' || loc == '/splash';
+
+      if (!isAuth && !isPublic) {
+        return '/login';
+      }
+
+      // Automatically route legacy onboarding/auth routes to single Google Login
+      if (loc == '/welcome' ||
+          loc == '/register' ||
+          loc == '/forgot-password' ||
+          loc == '/email-verification') {
+        return '/login';
+      }
+
+      return null;
+    },
     routes: [
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
-      GoRoute(
-        path: '/welcome',
-        builder: (context, state) => const WelcomeScreen(),
-      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(
-        path: '/register',
-        builder: (context, state) => const RegisterScreen(),
-      ),
-      GoRoute(
-        path: '/forgot-password',
-        builder: (context, state) => const ForgotPasswordScreen(),
-      ),
+      GoRoute(path: '/welcome', redirect: (context, state) => '/login'),
+      GoRoute(path: '/register', redirect: (context, state) => '/login'),
+      GoRoute(path: '/forgot-password', redirect: (context, state) => '/login'),
       GoRoute(
         path: '/email-verification',
-        builder: (context, state) {
-          final email = state.extra as String? ?? '';
-          return EmailVerificationScreen(email: email);
-        },
+        redirect: (context, state) => '/login',
       ),
       GoRoute(
         path: '/create-pin',
@@ -152,7 +184,7 @@ class _MainScaffold extends StatelessWidget {
         onTap: (index) {
           if (index == 1) {
             // Central camera action: opens camera directly
-            Navigator.of(context).push(
+            Navigator.of(context, rootNavigator: true).push(
               MaterialPageRoute(
                 builder: (context) => const PrivateCameraScreen(),
               ),

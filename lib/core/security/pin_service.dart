@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
 import '../constants/app_constants.dart';
 import '../errors/app_exception.dart';
 import 'secure_key_service.dart';
@@ -29,6 +28,7 @@ class PinService {
   Future<void> setupPin({
     required String pin,
     required Uint8List masterKey,
+    String? userId,
   }) async {
     _validatePinFormat(pin);
 
@@ -42,29 +42,32 @@ class PinService {
       pinVerifier: base64Encode(verifierBytes),
       wrappedMasterKey: wrapped['wrappedKey']!,
       kekNonce: wrapped['nonce']!,
+      userId: userId,
     );
 
     _activeMasterKey = Uint8List.fromList(masterKey);
-    await _secureKeyService.resetLockout();
+    await _secureKeyService.resetLockout(userId);
   }
 
   /// Verifies entered PIN against stored salted verifier.
   /// If valid, unwraps the master key into memory and resets lockout.
   /// If invalid, increments failed attempts and enforces lockout if >= 5.
-  Future<bool> verifyAndUnlock(String pin) async {
+  Future<bool> verifyAndUnlock(String pin, {String? userId}) async {
     _validatePinFormat(pin);
 
     // Check lockout
-    final lockoutUntil = await _secureKeyService.getLockoutUntil();
+    final lockoutUntil = await _secureKeyService.getLockoutUntil(userId);
     if (lockoutUntil != null && DateTime.now().isBefore(lockoutUntil)) {
       final remaining = lockoutUntil.difference(DateTime.now()).inSeconds + 1;
       throw PinLockoutException(remaining);
     }
 
-    final saltBase64 = await _secureKeyService.getPinSalt();
-    final verifierBase64 = await _secureKeyService.getPinVerifier();
-    final wrappedKeyBase64 = await _secureKeyService.getWrappedMasterKey();
-    final kekNonceBase64 = await _secureKeyService.getKekNonce();
+    final saltBase64 = await _secureKeyService.getPinSalt(userId);
+    final verifierBase64 = await _secureKeyService.getPinVerifier(userId);
+    final wrappedKeyBase64 = await _secureKeyService.getWrappedMasterKey(
+      userId,
+    );
+    final kekNonceBase64 = await _secureKeyService.getKekNonce(userId);
 
     if (saltBase64 == null ||
         verifierBase64 == null ||
@@ -80,7 +83,7 @@ class PinService {
 
     // Timing-safe comparison
     if (!_constantTimeEquals(enteredVerifier, storedVerifier)) {
-      await _handleFailedAttempt();
+      await _handleFailedAttempt(userId);
       return false;
     }
 
@@ -94,7 +97,7 @@ class PinService {
       );
 
       _activeMasterKey = masterKey;
-      await _secureKeyService.resetLockout();
+      await _secureKeyService.resetLockout(userId);
       return true;
     } catch (e) {
       throw CryptoException('Failed to unwrap master vault key: $e');
@@ -105,20 +108,21 @@ class PinService {
   Future<void> changePin({
     required String currentPin,
     required String newPin,
+    String? userId,
   }) async {
     _validatePinFormat(currentPin);
     _validatePinFormat(newPin);
 
-    final isOldValid = await verifyAndUnlock(currentPin);
+    final isOldValid = await verifyAndUnlock(currentPin, userId: userId);
     if (!isOldValid || _activeMasterKey == null) {
       throw const PinException('Current PIN is incorrect.');
     }
 
     final currentMasterKey = Uint8List.fromList(_activeMasterKey!);
-    await setupPin(pin: newPin, masterKey: currentMasterKey);
+    await setupPin(pin: newPin, masterKey: currentMasterKey, userId: userId);
   }
 
-  /// In-memory clear of decrypted secrets when app locks
+  /// In-memory clear of decrypted secrets when app locks or signs out
   void lockSession() {
     if (_activeMasterKey != null) {
       // Overwrite memory before clearing
@@ -133,8 +137,9 @@ class PinService {
   Future<void> recoverAndSetPin({
     required Uint8List masterKey,
     required String newPin,
+    String? userId,
   }) async {
-    await setupPin(pin: newPin, masterKey: masterKey);
+    await setupPin(pin: newPin, masterKey: masterKey, userId: userId);
   }
 
   /// Validates format of a 6-digit PIN
@@ -148,9 +153,9 @@ class PinService {
   }
 
   /// Handles failed PIN entry and updates lockout
-  Future<void> _handleFailedAttempt() async {
-    final attempts = (await _secureKeyService.getFailedAttempts()) + 1;
-    await _secureKeyService.setFailedAttempts(attempts);
+  Future<void> _handleFailedAttempt([String? userId]) async {
+    final attempts = (await _secureKeyService.getFailedAttempts(userId)) + 1;
+    await _secureKeyService.setFailedAttempts(attempts, userId);
 
     if (attempts >= AppConstants.maxPinAttemptsBeforeLockout) {
       // Exponential/progressive lockout: 30s, 60s, 120s, 240s...
@@ -160,7 +165,7 @@ class PinService {
       final lockoutUntil = DateTime.now().add(
         Duration(seconds: penaltySeconds),
       );
-      await _secureKeyService.setLockoutUntil(lockoutUntil);
+      await _secureKeyService.setLockoutUntil(lockoutUntil, userId);
       throw PinLockoutException(penaltySeconds);
     }
   }

@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
-import '../../core/config/environment.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/utils/validators.dart';
+import '../../core/widgets/google_icon.dart';
 import '../../core/widgets/privora_button.dart';
 import '../../core/widgets/privora_logo.dart';
 
-/// Screen allowing users to sign in with email/password or Google.
+/// Clean Google-only Authentication Screen for Privora.
+/// Replaces visible email/password inputs with a single "Continue with Google" action,
+/// adhering to Privora's modern blue-and-white design system.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,23 +20,11 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMessage;
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleEmailLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _handleGoogleSignIn() async {
+    if (_isLoading) return;
 
     setState(() {
       _isLoading = true;
@@ -43,49 +33,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     try {
       final authRepo = ref.read(authRepositoryProvider);
-      await authRepo.signIn(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
+      final response = await authRepo.signInWithGoogle();
 
+      // If user cancelled the Google account chooser, stay on Login quietly without large error banner
+      if (response == null) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      final user = response.user ?? authRepo.currentUser;
+      if (user == null) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage =
+                'Authentication completed but no user profile found.';
+          });
+        }
+        return;
+      }
+
+      // Check server vault information for this user
       final vaultRepo = ref.read(vaultRepositoryProvider);
-      final hasSetup = await vaultRepo.hasCompletedSetup();
+      final serverVault = await vaultRepo.getServerVaultData(user.id);
 
       if (!mounted) return;
 
-      if (hasSetup) {
-        context.go('/unlock');
-      } else {
-        // First login on this device: create PIN and initialize/recover vault
+      if (serverVault == null) {
+        // Authenticated user with no existing cloud vault -> Setup 6-digit PIN
         context.go('/create-pin');
+      } else {
+        // User has an existing cloud vault
+        final hasLocalKeys = await vaultRepo.hasCompletedSetup(user.id);
+        if (!mounted) return;
+        if (hasLocalKeys) {
+          // Returning user on configured device -> Unlock with 6-digit PIN
+          context.go('/unlock');
+        } else {
+          // Returning user on new device / wiped local state -> Recovery flow
+          context.go('/recover-vault');
+        }
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _handleGoogleLogin() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final authRepo = ref.read(authRepositoryProvider);
-      await authRepo.signInWithGoogle();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = e
+            .toString()
+            .replaceFirst('Exception: ', '')
+            .replaceFirst('AuthException: ', '');
       });
     } finally {
       if (mounted) {
@@ -99,161 +98,128 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go('/welcome'),
-        ),
-      ),
+      backgroundColor: AppColors.mainBackground,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Form(
-            key: _formKey,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const PrivoraLogo(size: 56),
                 const SizedBox(height: 20),
-                const Text('Sign In', style: AppTypography.displayLarge),
-                const SizedBox(height: 8),
-                const Text(
-                  'Access your private encrypted gallery.',
-                  style: AppTypography.bodyMedium,
-                ),
-                const SizedBox(height: 32),
 
+                // Privora Logo
+                const PrivoraLogo(size: 88, showShadow: true),
+                const SizedBox(height: 24),
+
+                // App Title
+                const Text(
+                  AppConstants.appName,
+                  style: AppTypography.displayLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+
+                // Subtitle
+                Text(
+                  'Your private cloud gallery',
+                  style: AppTypography.titleSmall.copyWith(
+                    color: AppColors.secondaryTextColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 48),
+
+                // Error message banner
                 if (_errorMessage != null) ...[
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha: 0.12),
+                      color: AppColors.errorDestructive.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppColors.danger.withValues(alpha: 0.4),
+                        color: AppColors.errorDestructive.withValues(
+                          alpha: 0.3,
+                        ),
                       ),
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Icon(
                           Icons.error_outline_rounded,
-                          color: AppColors.danger,
+                          color: AppColors.errorDestructive,
                           size: 20,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _errorMessage!,
                             style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.danger,
+                              color: AppColors.errorDestructive,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                 ],
 
-                // Email field
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  autocorrect: false,
-                  style: AppTypography.bodyLarge,
-                  decoration: const InputDecoration(
-                    labelText: 'Email Address',
-                    prefixIcon: Icon(
-                      Icons.email_outlined,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  validator: Validators.validateEmail,
-                ),
-                const SizedBox(height: 16),
-
-                // Password field
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  style: AppTypography.bodyLarge,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(
-                      Icons.lock_outline_rounded,
-                      color: AppColors.secondaryText,
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        color: AppColors.secondaryText,
+                // Single "Continue with Google" Action Button
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryActionBlue.withValues(
+                          alpha: 0.12,
+                        ),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
                       ),
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                    ),
-                  ),
-                  validator: Validators.validatePassword,
-                ),
-                const SizedBox(height: 8),
-
-                // Forgot Password link
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => context.push('/forgot-password'),
-                    child: const Text('Forgot Password?'),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Submit button
-                PrivoraButton(
-                  text: 'Sign In',
-                  isLoading: _isLoading,
-                  onPressed: _handleEmailLogin,
-                ),
-
-                // Optional Google Sign In
-                if (Environment.enableGoogleLogin) ...[
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('OR', style: AppTypography.labelSmall),
-                      ),
-                      const Expanded(child: Divider()),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  PrivoraButton(
+                  child: PrivoraButton(
                     text: 'Continue with Google',
                     variant: PrivoraButtonVariant.secondary,
-                    leadingIcon: Icons.g_mobiledata_rounded,
+                    leadingWidget: const GoogleIcon(size: 22),
                     isLoading: _isLoading,
-                    onPressed: _handleGoogleLogin,
+                    height: 54,
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
                   ),
-                ],
+                ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 36),
+
+                // Privacy assurance note
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Don\'t have an account?',
-                      style: AppTypography.bodyMedium,
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 16,
+                      color: AppColors.subtlePlaceholder,
                     ),
-                    TextButton(
-                      onPressed: () => context.go('/register'),
-                      child: const Text('Sign Up'),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Client-side encrypted with AES-256-GCM',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.subtlePlaceholder,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 20),
               ],
             ),
           ),

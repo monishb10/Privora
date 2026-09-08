@@ -9,7 +9,9 @@ import '../../core/widgets/privora_logo.dart';
 
 /// App launch splash screen.
 /// Minimal appearance with #F7FCFF background, centered Privora logo,
-/// app name, and official tagline. Validates Supabase session and routes cleanly.
+/// app name, and official tagline. Validates Supabase session and routes cleanly
+/// through the guarded startup flow:
+/// Loading session -> Google Login -> Create/Enter PIN -> Categories.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -51,26 +53,47 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     final authRepo = ref.read(authRepositoryProvider);
     final vaultRepo = ref.read(vaultRepositoryProvider);
+    final isLocked = ref.read(sessionLockServiceProvider);
     final user = authRepo.currentUser;
 
     if (user == null) {
-      // First installation or logged out
-      context.go('/welcome');
+      // Rule: No Supabase session -> Google Login
+      context.go('/login');
       return;
     }
 
     // Clean expired trash for authenticated user
-    ref.read(photoRepositoryProvider).cleanExpiredTrash(user.id);
+    try {
+      ref.read(photoRepositoryProvider).cleanExpiredTrash(user.id);
+    } catch (_) {}
 
-    final hasSetup = await vaultRepo.hasCompletedSetup();
+    // Verify vault setup from server record
+    final serverVault = await vaultRepo.getServerVaultData(user.id);
     if (!mounted) return;
 
-    if (hasSetup) {
-      // Returning user on the same device -> Proceed directly to 6-digit PIN screen
-      context.go('/unlock');
-    } else {
-      // Authenticated but hasn't created local vault PIN yet
+    if (serverVault == null) {
+      // Rule: Authenticated user with no PIN/vault setup -> Create PIN
       context.go('/create-pin');
+      return;
+    }
+
+    // Server vault exists: check if local key material is present
+    final hasLocal = await vaultRepo.hasCompletedSetup(user.id);
+    if (!mounted) return;
+
+    if (!hasLocal) {
+      // Required local key material missing on this device -> Recovery flow
+      context.go('/recover-vault');
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Rule: Authenticated and unlocked user -> Categories; otherwise Enter PIN
+    if (!isLocked && vaultRepo.hasActiveKey) {
+      context.go('/categories');
+    } else {
+      context.go('/unlock');
     }
   }
 

@@ -11,6 +11,7 @@ class PrivoraButton extends StatelessWidget {
   final PrivoraButtonVariant variant;
   final bool isLoading;
   final IconData? leadingIcon;
+  final Widget? leadingWidget;
   final IconData? trailingIcon;
   final double? width;
   final double height;
@@ -22,6 +23,7 @@ class PrivoraButton extends StatelessWidget {
     this.variant = PrivoraButtonVariant.primary,
     this.isLoading = false,
     this.leadingIcon,
+    this.leadingWidget,
     this.trailingIcon,
     this.width,
     this.height = 52,
@@ -94,7 +96,10 @@ class PrivoraButton extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (leadingIcon != null) ...[
+                        if (leadingWidget != null) ...[
+                          leadingWidget!,
+                          const SizedBox(width: 12),
+                        ] else if (leadingIcon != null) ...[
                           Icon(leadingIcon, size: 20, color: foregroundColor),
                           const SizedBox(width: 10),
                         ],

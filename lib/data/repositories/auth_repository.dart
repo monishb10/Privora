@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import '../../core/errors/app_exception.dart';
+import '../../core/security/pin_service.dart';
 import '../../core/security/secure_key_service.dart';
 import '../../core/security/session_lock_service.dart';
+import '../../core/security/temporary_file_cleaner.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_database_service.dart';
 import '../services/supabase_storage_service.dart';
@@ -14,6 +16,8 @@ class AuthRepository {
   final SupabaseStorageService storageService;
   final SecureKeyService secureKeyService;
   final SessionLockNotifier lockService;
+  final PinService pinService;
+  final TemporaryFileCleaner temporaryFileCleaner;
 
   AuthRepository({
     required this.authService,
@@ -21,9 +25,12 @@ class AuthRepository {
     required this.storageService,
     required this.secureKeyService,
     required this.lockService,
+    required this.pinService,
+    required this.temporaryFileCleaner,
   });
 
   sp.User? get currentUser => authService.currentUser;
+  sp.Session? get currentSession => authService.currentSession;
   bool get isAuthenticated => authService.isAuthenticated;
   Stream<sp.AuthState> get authStateChanges => authService.authStateChanges;
 
@@ -46,7 +53,7 @@ class AuthRepository {
     return authService.signIn(email: email, password: password);
   }
 
-  Future<bool> signInWithGoogle() {
+  Future<sp.AuthResponse?> signInWithGoogle() {
     return authService.signInWithGoogle();
   }
 
@@ -54,9 +61,27 @@ class AuthRepository {
     return authService.sendPasswordResetEmail(email);
   }
 
-  /// Signs out, locks the session, and clears decrypted memory
+  /// Full clean sign out protocol:
+  /// 1. Immediately locks the vault.
+  /// 2. Clears the decrypted vault key from memory.
+  /// 3. Deletes temporary decrypted image files and temporary thumbnails.
+  /// 4. Signs out of Google and Supabase.
+  /// 5. Leaves encrypted per-user keys intact for returning user.
   Future<void> signOut() async {
+    // 1. Lock vault
     lockService.resetToLocked();
+
+    // 2. Clear master key from memory
+    pinService.lockSession();
+
+    // 3. Delete temporary decrypted files and thumbnails
+    try {
+      await temporaryFileCleaner.cleanTemporaryFiles();
+    } catch (e) {
+      debugPrint('Error cleaning temporary files on signOut: $e');
+    }
+
+    // 4. Sign out of Google and Supabase
     await authService.signOut();
   }
 
@@ -76,13 +101,17 @@ class AuthRepository {
       // 2. Delete database rows (photos, categories, vault keys, profile)
       await databaseService.deleteUserDatabaseRecords(userId);
 
-      // 3. Clear all local secure credentials and keys
-      await secureKeyService.clearAll();
+      // 3. Clear all local secure credentials and keys for this user
+      await secureKeyService.clearUserKeys(userId);
 
-      // 4. Lock session
+      // 4. Clean temporary files
+      await temporaryFileCleaner.cleanTemporaryFiles();
+
+      // 5. Clear memory key and lock session
+      pinService.lockSession();
       lockService.resetToLocked();
 
-      // 5. Sign out of Supabase
+      // 6. Sign out of Google and Supabase
       await authService.signOut();
     } catch (e) {
       debugPrint('Account deletion warning: $e');

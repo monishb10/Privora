@@ -1,12 +1,28 @@
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import '../../core/config/environment.dart';
 import '../../core/config/supabase_config.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/errors/error_mapper.dart';
 
-/// Service managing Supabase authentication (Email/Password, Google OAuth).
+/// Service managing Supabase authentication (Native Google Sign-In with IdToken, Email/Password).
 class SupabaseAuthService {
+  final GoogleSignIn _googleSignIn;
+  bool _isGoogleSignInRunning = false;
+
+  SupabaseAuthService({GoogleSignIn? googleSignIn})
+    : _googleSignIn =
+          googleSignIn ??
+          GoogleSignIn(
+            serverClientId: Environment.googleWebClientId.isNotEmpty
+                ? Environment.googleWebClientId
+                : null,
+            scopes: const ['email', 'profile', 'openid'],
+          );
+
+  GoogleSignIn get googleSignIn => _googleSignIn;
+
   sp.SupabaseClient get _client {
     final client = SupabaseConfig.client;
     if (client == null) {
@@ -27,7 +43,7 @@ class SupabaseAuthService {
     return client.auth.onAuthStateChange;
   }
 
-  /// Sign up with email, password, and display name
+  /// Sign up with email, password, and display name (preserved for fallback recovery)
   Future<sp.AuthResponse> signUp({
     required String email,
     required String password,
@@ -49,7 +65,7 @@ class SupabaseAuthService {
     }
   }
 
-  /// Sign in with email and password
+  /// Sign in with email and password (preserved for fallback recovery)
   Future<sp.AuthResponse> signIn({
     required String email,
     required String password,
@@ -66,25 +82,65 @@ class SupabaseAuthService {
     }
   }
 
-  /// Sign in with Google OAuth using PKCE flow
-  Future<bool> signInWithGoogle() async {
-    if (!Environment.enableGoogleLogin) {
-      throw const AuthException(
-        'Google login is not enabled in this configuration.',
-      );
+  /// Sign in with Google using native GoogleSignIn and exchange idToken with Supabase.
+  /// Returns null if user cancelled the account selection.
+  Future<sp.AuthResponse?> signInWithGoogle() async {
+    if (_isGoogleSignInRunning) {
+      return null;
     }
+
+    _isGoogleSignInRunning = true;
     try {
-      return await _client.auth.signInWithOAuth(
-        sp.OAuthProvider.google,
-        redirectTo: 'com.monish.privora://login-callback',
+      // 1. Display native Android / iOS Google account chooser
+      final googleUser = await _googleSignIn.signIn().timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {
+          throw const AuthException(
+            'Google Sign-In timed out. Please check your network and try again.',
+          );
+        },
       );
+
+      // User cancelled account selection
+      if (googleUser == null) {
+        return null;
+      }
+
+      // 2. Obtain Google ID token
+      final googleAuth = await googleUser.authentication.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw const AuthException(
+            'Obtaining Google credentials timed out. Please try again.',
+          );
+        },
+      );
+
+      final idToken = googleAuth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw const AuthException(
+          'Failed to retrieve Google authentication token. Please ensure Google Play Services is available.',
+        );
+      }
+
+      // 3. Authenticate with Supabase using signInWithIdToken
+      final response = await _client.auth.signInWithIdToken(
+        provider: sp.OAuthProvider.google,
+        idToken: idToken,
+        accessToken: googleAuth.accessToken,
+      );
+
+      return response;
     } catch (e) {
+      if (e is AuthException) rethrow;
       debugPrint('Google Sign In error: $e');
       throw AuthException(ErrorMapper.mapToUserMessage(e));
+    } finally {
+      _isGoogleSignInRunning = false;
     }
   }
 
-  /// Send password reset email
+  /// Send password reset email (preserved)
   Future<void> sendPasswordResetEmail(String email) async {
     try {
       await _client.auth.resetPasswordForEmail(
@@ -97,14 +153,22 @@ class SupabaseAuthService {
     }
   }
 
-  /// Sign out current session
+  /// Signs out of Google and Supabase
   Future<void> signOut() async {
+    // 1. Sign out of Google
+    try {
+      await _googleSignIn.signOut();
+    } catch (e) {
+      debugPrint('Google signOut warning: $e');
+    }
+
+    // 2. Sign out of Supabase
     try {
       if (SupabaseConfig.client != null) {
         await _client.auth.signOut();
       }
     } catch (e) {
-      debugPrint('SignOut error: $e');
+      debugPrint('Supabase signOut error: $e');
     }
   }
 }

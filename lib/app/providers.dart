@@ -91,6 +91,8 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
     storageService: ref.watch(supabaseStorageServiceProvider),
     secureKeyService: ref.watch(secureKeyServiceProvider),
     lockService: ref.watch(sessionLockServiceProvider.notifier),
+    pinService: ref.watch(pinServiceProvider),
+    temporaryFileCleaner: ref.watch(temporaryFileCleanerProvider),
   );
 });
 

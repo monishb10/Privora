@@ -25,15 +25,19 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       context: context,
       title: 'Sign Out?',
       message:
-          'You will need your password and 6-digit PIN to sign back into Privora.',
+          'You will need to sign in again with Google and enter your 6-digit PIN to access your private vault.',
       confirmText: 'Sign Out',
       icon: Icons.logout_rounded,
     );
 
     if (confirmed == true && mounted) {
       await ref.read(authRepositoryProvider).signOut();
+      ref.invalidate(currentUserProvider);
+      ref.invalidate(categoriesProvider);
+      ref.invalidate(recentlyDeletedPhotosProvider);
+      ref.invalidate(storageUsageProvider);
       if (mounted) {
-        context.go('/welcome');
+        context.go('/login');
       }
     }
   }
@@ -61,7 +65,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             content: Text('Account and all vault data permanently erased.'),
           ),
         );
-        context.go('/welcome');
+        context.go('/login');
       }
     } catch (e) {
       if (mounted) {

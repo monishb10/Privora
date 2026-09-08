@@ -55,6 +55,9 @@ class AppColors {
   static const Color danger = errorDestructive;
   static const Color border = borderDivider;
   static const Color success = successColor;
+  static const Color surfaceCard = cardSurface;
+  static const Color primaryTextColor = primaryText;
+  static const Color subtlePlaceholder = disabledElements;
   static const Color warning = Color(0xFFE08A00);
 
   // Subtle shadows & overlays (soft blue/dark tint, zero heavy glow)

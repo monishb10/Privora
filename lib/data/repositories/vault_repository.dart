@@ -23,25 +23,38 @@ class VaultRepository {
   bool get hasActiveKey => pinService.hasActiveKey;
   Uint8List? get activeMasterKey => pinService.activeMasterKey;
 
-  Future<bool> hasCompletedSetup() {
-    return secureKeyService.hasCompletedSetup();
+  Future<bool> hasCompletedSetup([String? userId]) {
+    return secureKeyService.hasCompletedSetup(userId);
+  }
+
+  Future<Map<String, dynamic>?> getServerVaultData(String userId) {
+    return databaseService.getVaultKeys(userId);
   }
 
   /// First installation setup:
-  /// 1. Generates 256-bit random master key.
-  /// 2. Sets up 6-digit PIN locally.
-  /// 3. Generates high-entropy recovery code.
-  /// 4. Wraps master key with recovery key and stores in Supabase vault_keys table.
-  /// 5. Returns plaintext recovery code to show user ONCE.
+  /// 1. Verifies that server does not already have an existing vault record (prevents overwriting).
+  /// 2. Generates 256-bit random master key.
+  /// 3. Sets up 6-digit PIN locally namespaced to userId.
+  /// 4. Generates high-entropy recovery code.
+  /// 5. Wraps master key with recovery key and stores in Supabase vault_keys table.
+  /// 6. Returns plaintext recovery code to show user ONCE.
   Future<String> initializeNewVault({
     required String userId,
     required String pin,
   }) async {
     try {
+      // Check if existing vault record already exists on the server to prevent accidental overwrite
+      final existingVault = await databaseService.getVaultKeys(userId);
+      if (existingVault != null) {
+        throw const CryptoException(
+          'An existing vault was found for this account. To prevent data loss, please use vault recovery.',
+        );
+      }
+
       final masterKey = cryptoService.generateMasterKey();
 
-      // 1. Setup local PIN and local wrapped key
-      await pinService.setupPin(pin: pin, masterKey: masterKey);
+      // 1. Setup local PIN and local wrapped key namespaced to this user
+      await pinService.setupPin(pin: pin, masterKey: masterKey, userId: userId);
 
       // 2. Generate recovery code & wrap for cloud backup
       final recoveryCode = cryptoService.generateRecoveryCode();
@@ -67,18 +80,27 @@ class VaultRepository {
       return recoveryCode;
     } catch (e) {
       debugPrint('initializeNewVault error: $e');
+      if (e is CryptoException) rethrow;
       throw CryptoException('Failed to initialize vault keys: $e');
     }
   }
 
   /// Verifies entered PIN and unwraps the master key for the current session.
-  Future<bool> verifyAndUnlock(String pin) {
-    return pinService.verifyAndUnlock(pin);
+  Future<bool> verifyAndUnlock(String pin, {String? userId}) {
+    return pinService.verifyAndUnlock(pin, userId: userId);
   }
 
   /// Changes the user's PIN using the current PIN.
-  Future<void> changePin({required String currentPin, required String newPin}) {
-    return pinService.changePin(currentPin: currentPin, newPin: newPin);
+  Future<void> changePin({
+    required String currentPin,
+    required String newPin,
+    String? userId,
+  }) {
+    return pinService.changePin(
+      currentPin: currentPin,
+      newPin: newPin,
+      userId: userId,
+    );
   }
 
   /// Recovers master key from cloud using the user's recovery code and sets a new PIN.
@@ -112,11 +134,16 @@ class VaultRepository {
         wrappingKey: recoveryKek,
       );
 
-      // Setup new PIN with the recovered master key
-      await pinService.recoverAndSetPin(masterKey: masterKey, newPin: newPin);
+      // Setup new PIN with the recovered master key namespaced to this user
+      await pinService.recoverAndSetPin(
+        masterKey: masterKey,
+        newPin: newPin,
+        userId: userId,
+      );
     } catch (e) {
       debugPrint('recoverVault error: $e');
-      throw RecoveryException(
+      if (e is RecoveryException) rethrow;
+      throw const RecoveryException(
         'Invalid recovery code or corrupted recovery data.',
       );
     }
