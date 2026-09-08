@@ -57,11 +57,22 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
       final user = ref.read(currentUserProvider);
       if (user == null) return;
 
-      // Thumbnail path: {userId}/thumbnails/{coverId}.enc
-      final thumbPath = '${user.id}/thumbnails/$coverId.enc';
-      final bytes = await ref
-          .read(photoRepositoryProvider)
-          .loadThumbnail(thumbnailPath: thumbPath, masterKey: masterKey);
+      final photo = await ref
+          .read(supabaseDatabaseServiceProvider)
+          .getPhotoById(coverId, user.id);
+
+      Uint8List bytes;
+      if (photo != null) {
+        bytes = await ref
+            .read(photoRepositoryProvider)
+            .loadThumbnail(photo: photo, masterKey: masterKey);
+      } else {
+        // Thumbnail path fallback: {userId}/thumbnails/{coverId}.enc
+        final thumbPath = '${user.id}/thumbnails/$coverId.enc';
+        bytes = await ref
+            .read(photoRepositoryProvider)
+            .loadThumbnail(thumbnailPath: thumbPath, masterKey: masterKey);
+      }
 
       if (mounted) {
         setState(() {
@@ -231,11 +242,10 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
                   children: [
                     Text(
                       widget.category.name,
-                      style: AppTypography.titleMedium.copyWith(
+                      style: AppTypography.categoryName.copyWith(
                         color: _coverBytes != null
                             ? Colors.white
                             : AppColors.primaryText,
-                        fontWeight: FontWeight.w700,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -245,11 +255,10 @@ class _CategoryCardState extends ConsumerState<CategoryCard> {
                       children: [
                         Text(
                           '${widget.category.photoCount} ${widget.category.photoCount == 1 ? 'photo' : 'photos'}',
-                          style: AppTypography.bodySmall.copyWith(
+                          style: AppTypography.photoCount.copyWith(
                             color: _coverBytes != null
-                                ? Colors.white70
+                                ? Colors.white.withValues(alpha: 0.85)
                                 : AppColors.secondaryTextColor,
-                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         if (widget.category.latestPhotoDate != null) ...[

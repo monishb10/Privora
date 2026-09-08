@@ -101,9 +101,8 @@ class PrivoraButton extends StatelessWidget {
                         Flexible(
                           child: Text(
                             text,
-                            style: AppTypography.labelLarge.copyWith(
+                            style: AppTypography.buttonText.copyWith(
                               color: foregroundColor,
-                              fontWeight: FontWeight.w600,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

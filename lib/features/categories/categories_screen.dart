@@ -3,14 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../core/config/supabase_config.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/confirmation_dialog.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/error_view.dart';
-import '../../core/widgets/privora_logo.dart';
+import '../../core/widgets/privora_brand_app_bar.dart';
 import '../../data/models/vault_category.dart';
 import 'category_card.dart';
 import 'create_category_sheet.dart';
@@ -106,58 +105,24 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                style: AppTypography.bodyLarge,
-                decoration: const InputDecoration(
-                  hintText: 'Search categories...',
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  fillColor: Colors.transparent,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onChanged: (val) =>
-                    setState(() => _searchQuery = val.trim().toLowerCase()),
-              )
-            : Row(
-                children: [
-                  const PrivoraLogo(size: 32, showShadow: false),
-                  const SizedBox(width: 10),
-                  const Text(
-                    AppConstants.appName,
-                    style: AppTypography.titleLarge,
-                  ),
-                ],
-              ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isSearching ? Icons.close_rounded : Icons.search_rounded,
-            ),
-            tooltip: _isSearching ? 'Close Search' : 'Search Categories',
-            onPressed: () {
-              setState(() {
-                if (_isSearching) {
-                  _searchController.clear();
-                  _searchQuery = '';
-                }
-                _isSearching = !_isSearching;
-              });
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.lock_outline_rounded),
-            tooltip: 'Lock Privora',
-            onPressed: () {
-              ref.read(sessionLockServiceProvider.notifier).lock();
-              context.go('/unlock');
-            },
-          ),
-        ],
+      appBar: PrivoraBrandAppBar(
+        isSearching: _isSearching,
+        searchController: _searchController,
+        onSearchChanged: (val) =>
+            setState(() => _searchQuery = val.trim().toLowerCase()),
+        onToggleSearch: () {
+          setState(() {
+            if (_isSearching) {
+              _searchController.clear();
+              _searchQuery = '';
+            }
+            _isSearching = !_isSearching;
+          });
+        },
+        onLock: () {
+          ref.read(sessionLockServiceProvider.notifier).lock();
+          context.go('/unlock');
+        },
       ),
       body: _isRetrying
           ? const Center(
@@ -206,9 +171,11 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   backgroundColor: AppColors.cardSurface,
                   onRefresh: _handleRetry,
                   child: GridView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 16,
+                      bottom: 170 + MediaQuery.paddingOf(context).bottom,
                     ),
                     physics: const AlwaysScrollableScrollPhysics(),
                     gridDelegate:
@@ -246,19 +213,32 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                 onRetry: _isRetrying ? null : _handleRetry,
               ),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primaryActionBlue,
-        foregroundColor: Colors.white,
-        elevation: 3,
-        icon: const Icon(Icons.add_rounded, size: 22),
-        label: Text(
-          'New Category',
-          style: AppTypography.labelLarge.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 82),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryActionBlue.withValues(alpha: 0.30),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: FloatingActionButton.extended(
+            elevation: 0,
+            highlightElevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: AppColors.primaryActionBlue,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add_rounded, size: 22),
+            label: const Text('New Category', style: AppTypography.buttonText),
+            onPressed: () => CreateCategorySheet.show(context),
           ),
         ),
-        onPressed: () => CreateCategorySheet.show(context),
       ),
     );
   }

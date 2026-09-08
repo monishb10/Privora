@@ -82,7 +82,9 @@ class SessionLockNotifier extends Notifier<bool> {
 
   /// Explicitly does NOT lock on inactive state (e.g. notification panel, permission dialogs, system overlays)
   void onAppInactive() {
-    debugPrint('Privora: Inactive state ignored (notification panel / overlay)');
+    debugPrint(
+      'Privora: Inactive state ignored (notification panel / overlay)',
+    );
   }
 
   /// Resets lock state to locked upon logout

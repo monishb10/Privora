@@ -12,6 +12,7 @@ import '../data/repositories/auth_repository.dart';
 import '../data/repositories/category_repository.dart';
 import '../data/repositories/photo_repository.dart';
 import '../data/repositories/vault_repository.dart';
+import '../data/services/cloudinary_media_service.dart';
 import '../data/services/photo_download_service.dart';
 import '../data/services/photo_upload_service.dart';
 import '../data/services/supabase_auth_service.dart';
@@ -59,9 +60,14 @@ final supabaseStorageServiceProvider = Provider<SupabaseStorageService>((ref) {
   return SupabaseStorageService();
 });
 
+final cloudinaryMediaServiceProvider = Provider<CloudinaryMediaService>((ref) {
+  return CloudinaryMediaService();
+});
+
 final photoDownloadServiceProvider = Provider<PhotoDownloadService>((ref) {
   return PhotoDownloadService(
     storageService: ref.watch(supabaseStorageServiceProvider),
+    cloudinaryService: ref.watch(cloudinaryMediaServiceProvider),
     cryptoService: ref.watch(vaultCryptoServiceProvider),
   );
 });
@@ -70,6 +76,7 @@ final photoUploadServiceProvider = Provider<PhotoUploadService>((ref) {
   return PhotoUploadService(
     cryptoService: ref.watch(vaultCryptoServiceProvider),
     storageService: ref.watch(supabaseStorageServiceProvider),
+    cloudinaryService: ref.watch(cloudinaryMediaServiceProvider),
     databaseService: ref.watch(supabaseDatabaseServiceProvider),
     cleaner: ref.watch(temporaryFileCleanerProvider),
   );
@@ -99,6 +106,7 @@ final photoRepositoryProvider = Provider<PhotoRepository>((ref) {
     storageService: ref.watch(supabaseStorageServiceProvider),
     uploadService: ref.watch(photoUploadServiceProvider),
     downloadService: ref.watch(photoDownloadServiceProvider),
+    cloudinaryService: ref.watch(cloudinaryMediaServiceProvider),
   );
 });
 

@@ -77,7 +77,7 @@ class PhotoGrid extends ConsumerWidget {
                 child: masterKey == null
                     ? const SizedBox()
                     : _EncryptedThumbnailTile(
-                        thumbnailPath: photo.thumbnailPath,
+                        photo: photo,
                         masterKey: masterKey,
                       ),
               ),
@@ -123,20 +123,17 @@ class PhotoGrid extends ConsumerWidget {
 }
 
 class _EncryptedThumbnailTile extends ConsumerWidget {
-  final String thumbnailPath;
+  final VaultPhoto photo;
   final Uint8List masterKey;
 
-  const _EncryptedThumbnailTile({
-    required this.thumbnailPath,
-    required this.masterKey,
-  });
+  const _EncryptedThumbnailTile({required this.photo, required this.masterKey});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return FutureBuilder<Uint8List>(
       future: ref
           .read(photoRepositoryProvider)
-          .loadThumbnail(thumbnailPath: thumbnailPath, masterKey: masterKey),
+          .loadThumbnail(photo: photo, masterKey: masterKey),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(

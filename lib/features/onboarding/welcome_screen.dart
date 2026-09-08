@@ -60,7 +60,7 @@ class WelcomeScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   const Text(
                     AppConstants.appName,
-                    style: AppTypography.titleLarge,
+                    style: AppTypography.brandTitle,
                   ),
                 ],
               ),

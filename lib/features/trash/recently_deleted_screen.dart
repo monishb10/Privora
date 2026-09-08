@@ -217,7 +217,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                                       future: ref
                                           .read(photoRepositoryProvider)
                                           .loadThumbnail(
-                                            thumbnailPath: photo.thumbnailPath,
+                                            photo: photo,
                                             masterKey: masterKey,
                                           ),
                                       builder: (context, snapshot) {

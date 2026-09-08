@@ -34,7 +34,9 @@ class ErrorMapper {
       if (msg.contains('rate limit')) {
         return 'Too many requests. Please wait a moment and try again.';
       }
-      if (msg.contains('jwt') || msg.contains('session') || msg.contains('expired')) {
+      if (msg.contains('jwt') ||
+          msg.contains('session') ||
+          msg.contains('expired')) {
         return 'Session expired. Please sign in again.';
       }
       return 'Authentication failed. Please verify your credentials.';
@@ -53,7 +55,10 @@ class ErrorMapper {
       if (code == '42501' || msg.contains('row-level security')) {
         return 'Access denied. You do not have permission for this action.';
       }
-      if (code == 'PGRST301' || msg.contains('jwt') || msg.contains('expired') || msg.contains('session')) {
+      if (code == 'PGRST301' ||
+          msg.contains('jwt') ||
+          msg.contains('expired') ||
+          msg.contains('session')) {
         return 'Session expired. Please sign in again.';
       }
       return 'Database operation could not be completed. Please try again.';

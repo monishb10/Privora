@@ -209,10 +209,7 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                 return FutureBuilder<Uint8List>(
                   future: ref
                       .read(photoRepositoryProvider)
-                      .loadFullPhoto(
-                        photoPath: photo.storagePath,
-                        masterKey: masterKey,
-                      ),
+                      .loadFullPhoto(photo: photo, masterKey: masterKey),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(

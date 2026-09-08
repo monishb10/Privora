@@ -45,7 +45,7 @@ class AppTheme {
           systemNavigationBarColor: AppColors.mainBackground,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        titleTextStyle: AppTypography.titleLarge,
+        titleTextStyle: AppTypography.sectionTitle,
         iconTheme: IconThemeData(color: AppColors.primaryText),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(

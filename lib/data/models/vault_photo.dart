@@ -1,5 +1,5 @@
 /// Encrypted photo metadata model.
-/// Binary data is stored encrypted in Supabase Storage.
+/// Supports both legacy Supabase Storage and Cloudinary raw authenticated assets.
 class VaultPhoto {
   final String id;
   final String userId;
@@ -16,6 +16,27 @@ class VaultPhoto {
   final DateTime? deletedAt;
   final DateTime? deleteAfter;
 
+  /// Defines whether encrypted bytes reside on 'supabase' or 'cloudinary'
+  final String storageProvider;
+
+  /// Cloudinary public identifier for full photo (privora/{userId}/{categoryId}/{photoId})
+  final String? cloudinaryPublicId;
+
+  /// Cloudinary public identifier for thumbnail (privora/{userId}/{categoryId}/{photoId}_thumb)
+  final String? cloudinaryThumbnailPublicId;
+
+  /// Cloudinary internal asset UUID
+  final String? cloudinaryAssetId;
+
+  /// Cloudinary asset version string
+  final String? cloudinaryVersion;
+
+  /// Exact ciphertext size in bytes
+  final int? encryptedBytes;
+
+  /// Original unencrypted filename before vault import
+  final String? originalFilename;
+
   const VaultPhoto({
     required this.id,
     required this.userId,
@@ -31,9 +52,17 @@ class VaultPhoto {
     required this.updatedAt,
     this.deletedAt,
     this.deleteAfter,
+    this.storageProvider = 'supabase',
+    this.cloudinaryPublicId,
+    this.cloudinaryThumbnailPublicId,
+    this.cloudinaryAssetId,
+    this.cloudinaryVersion,
+    this.encryptedBytes,
+    this.originalFilename,
   });
 
   bool get isDeleted => deletedAt != null;
+  bool get isCloudinary => storageProvider == 'cloudinary';
 
   int get remainingDays {
     if (deleteAfter == null) return 30;
@@ -43,17 +72,23 @@ class VaultPhoto {
   }
 
   factory VaultPhoto.fromJson(Map<String, dynamic> json) {
+    final provider = json['storage_provider'] as String? ?? 'supabase';
+    final cPubId = json['cloudinary_public_id'] as String?;
+    final cThumbId = json['cloudinary_thumbnail_public_id'] as String?;
+
     return VaultPhoto(
       id: json['id'] as String,
       userId: json['user_id'] as String,
       categoryId: json['category_id'] as String,
-      storagePath: json['storage_path'] as String,
-      thumbnailPath: json['thumbnail_path'] as String,
+      storagePath: json['storage_path'] as String? ?? cPubId ?? '',
+      thumbnailPath: json['thumbnail_path'] as String? ?? cThumbId ?? '',
       displayName: json['display_name'] as String,
-      mimeType: json['mime_type'] as String,
+      mimeType: json['mime_type'] as String? ?? 'image/jpeg',
       encryptedSize: (json['encrypted_size'] is int)
           ? json['encrypted_size'] as int
-          : int.parse(json['encrypted_size'].toString()),
+          : (json['encrypted_size'] != null
+                ? int.parse(json['encrypted_size'].toString())
+                : (json['encrypted_bytes'] as int? ?? 0)),
       width: json['width'] as int?,
       height: json['height'] as int?,
       createdAt: json['created_at'] != null
@@ -68,6 +103,13 @@ class VaultPhoto {
       deleteAfter: json['delete_after'] != null
           ? DateTime.parse(json['delete_after'] as String)
           : null,
+      storageProvider: provider,
+      cloudinaryPublicId: cPubId,
+      cloudinaryThumbnailPublicId: cThumbId,
+      cloudinaryAssetId: json['cloudinary_asset_id'] as String?,
+      cloudinaryVersion: json['cloudinary_version']?.toString(),
+      encryptedBytes: json['encrypted_bytes'] as int?,
+      originalFilename: json['original_filename'] as String?,
     );
   }
 
@@ -81,12 +123,21 @@ class VaultPhoto {
       'display_name': displayName,
       'mime_type': mimeType,
       'encrypted_size': encryptedSize,
-      'width': width,
-      'height': height,
+      if (width != null) 'width': width,
+      if (height != null) 'height': height,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
-      'deleted_at': deletedAt?.toIso8601String(),
-      'delete_after': deleteAfter?.toIso8601String(),
+      if (deletedAt != null) 'deleted_at': deletedAt?.toIso8601String(),
+      if (deleteAfter != null) 'delete_after': deleteAfter?.toIso8601String(),
+      'storage_provider': storageProvider,
+      if (cloudinaryPublicId != null)
+        'cloudinary_public_id': cloudinaryPublicId,
+      if (cloudinaryThumbnailPublicId != null)
+        'cloudinary_thumbnail_public_id': cloudinaryThumbnailPublicId,
+      if (cloudinaryAssetId != null) 'cloudinary_asset_id': cloudinaryAssetId,
+      if (cloudinaryVersion != null) 'cloudinary_version': cloudinaryVersion,
+      if (encryptedBytes != null) 'encrypted_bytes': encryptedBytes,
+      if (originalFilename != null) 'original_filename': originalFilename,
     };
   }
 
@@ -105,6 +156,13 @@ class VaultPhoto {
     DateTime? updatedAt,
     DateTime? deletedAt,
     DateTime? deleteAfter,
+    String? storageProvider,
+    String? cloudinaryPublicId,
+    String? cloudinaryThumbnailPublicId,
+    String? cloudinaryAssetId,
+    String? cloudinaryVersion,
+    int? encryptedBytes,
+    String? originalFilename,
   }) {
     return VaultPhoto(
       id: id ?? this.id,
@@ -121,6 +179,14 @@ class VaultPhoto {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       deleteAfter: deleteAfter ?? this.deleteAfter,
+      storageProvider: storageProvider ?? this.storageProvider,
+      cloudinaryPublicId: cloudinaryPublicId ?? this.cloudinaryPublicId,
+      cloudinaryThumbnailPublicId:
+          cloudinaryThumbnailPublicId ?? this.cloudinaryThumbnailPublicId,
+      cloudinaryAssetId: cloudinaryAssetId ?? this.cloudinaryAssetId,
+      cloudinaryVersion: cloudinaryVersion ?? this.cloudinaryVersion,
+      encryptedBytes: encryptedBytes ?? this.encryptedBytes,
+      originalFilename: originalFilename ?? this.originalFilename,
     );
   }
 }

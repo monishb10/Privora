@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/upload_state.dart';
 import '../models/vault_photo.dart';
+import '../services/cloudinary_media_service.dart';
 import '../services/photo_download_service.dart';
 import '../services/photo_upload_service.dart';
 import '../services/supabase_database_service.dart';
@@ -14,12 +15,14 @@ class PhotoRepository {
   final SupabaseStorageService storageService;
   final PhotoUploadService uploadService;
   final PhotoDownloadService downloadService;
+  final CloudinaryMediaService? cloudinaryService;
 
   PhotoRepository({
     required this.databaseService,
     required this.storageService,
     required this.uploadService,
     required this.downloadService,
+    this.cloudinaryService,
   });
 
   Future<List<VaultPhoto>> getPhotosByCategory(
@@ -57,23 +60,43 @@ class PhotoRepository {
   }
 
   Future<Uint8List> loadThumbnail({
-    required String thumbnailPath,
+    String? thumbnailPath,
+    VaultPhoto? photo,
     required Uint8List masterKey,
   }) {
-    return downloadService.getDecryptedThumbnail(
-      thumbnailPath: thumbnailPath,
-      masterKey: masterKey,
-    );
+    if (photo != null) {
+      return downloadService.getDecryptedThumbnail(
+        photo: photo,
+        masterKey: masterKey,
+      );
+    }
+    if (thumbnailPath != null) {
+      return downloadService.getDecryptedThumbnailByPath(
+        thumbnailPath: thumbnailPath,
+        masterKey: masterKey,
+      );
+    }
+    throw ArgumentError('Either photo or thumbnailPath must be provided');
   }
 
   Future<Uint8List> loadFullPhoto({
-    required String photoPath,
+    String? photoPath,
+    VaultPhoto? photo,
     required Uint8List masterKey,
   }) {
-    return downloadService.getDecryptedFullPhoto(
-      photoPath: photoPath,
-      masterKey: masterKey,
-    );
+    if (photo != null) {
+      return downloadService.getDecryptedFullPhoto(
+        photo: photo,
+        masterKey: masterKey,
+      );
+    }
+    if (photoPath != null) {
+      return downloadService.getDecryptedFullPhotoByPath(
+        photoPath: photoPath,
+        masterKey: masterKey,
+      );
+    }
+    throw ArgumentError('Either photo or photoPath must be provided');
   }
 
   Future<void> softDeletePhoto(String photoId, String userId) {
@@ -90,11 +113,22 @@ class PhotoRepository {
 
   /// Permanently deletes a photo: Cloud Storage first, then Database record.
   Future<void> permanentlyDeletePhoto(VaultPhoto photo, String userId) async {
-    // 1. Delete encrypted objects from Supabase Storage
-    await storageService.deleteFiles([photo.storagePath, photo.thumbnailPath]);
+    if (photo.isCloudinary) {
+      if (cloudinaryService != null) {
+        await cloudinaryService!.permanentlyDelete(photoId: photo.id);
+      } else {
+        await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+      }
+    } else {
+      // 1. Delete encrypted objects from Supabase Storage
+      await storageService.deleteFiles([
+        photo.storagePath,
+        photo.thumbnailPath,
+      ]);
 
-    // 2. Delete database record
-    await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+      // 2. Delete database record
+      await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+    }
   }
 
   /// Empties Recently Deleted: deletes cloud storage objects first, then database records.
@@ -102,18 +136,34 @@ class PhotoRepository {
     final trashPhotos = await databaseService.getRecentlyDeletedPhotos(userId);
     if (trashPhotos.isEmpty) return;
 
-    final paths = <String>[];
+    final supabasePaths = <String>[];
     for (final photo in trashPhotos) {
-      paths.add(photo.storagePath);
-      paths.add(photo.thumbnailPath);
+      if (photo.isCloudinary) {
+        if (cloudinaryService != null) {
+          try {
+            await cloudinaryService!.permanentlyDelete(photoId: photo.id);
+          } catch (e) {
+            debugPrint('Error deleting Cloudinary photo ${photo.id}: $e');
+          }
+        } else {
+          await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+        }
+      } else {
+        supabasePaths.add(photo.storagePath);
+        supabasePaths.add(photo.thumbnailPath);
+      }
     }
 
-    // 1. Delete from Supabase Storage
-    await storageService.deleteFiles(paths);
+    // 1. Delete from Supabase Storage for legacy photos
+    if (supabasePaths.isNotEmpty) {
+      await storageService.deleteFiles(supabasePaths);
+    }
 
-    // 2. Delete from Database
+    // 2. Delete legacy metadata records from Database
     for (final photo in trashPhotos) {
-      await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+      if (!photo.isCloudinary) {
+        await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+      }
     }
   }
 
@@ -123,15 +173,36 @@ class PhotoRepository {
       final expired = await databaseService.getExpiredPhotos(userId);
       if (expired.isEmpty) return;
 
-      final paths = <String>[];
+      final supabasePaths = <String>[];
       for (final photo in expired) {
-        paths.add(photo.storagePath);
-        paths.add(photo.thumbnailPath);
+        if (photo.isCloudinary) {
+          if (cloudinaryService != null) {
+            try {
+              await cloudinaryService!.permanentlyDelete(photoId: photo.id);
+            } catch (e) {
+              debugPrint(
+                'cleanExpiredTrash Cloudinary error for ${photo.id}: $e',
+              );
+            }
+          } else {
+            await databaseService.permanentDeletePhotoMetadata(
+              photo.id,
+              userId,
+            );
+          }
+        } else {
+          supabasePaths.add(photo.storagePath);
+          supabasePaths.add(photo.thumbnailPath);
+        }
       }
 
-      await storageService.deleteFiles(paths);
+      if (supabasePaths.isNotEmpty) {
+        await storageService.deleteFiles(supabasePaths);
+      }
       for (final photo in expired) {
-        await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+        if (!photo.isCloudinary) {
+          await databaseService.permanentDeletePhotoMetadata(photo.id, userId);
+        }
       }
       debugPrint('Privora: Cleaned ${expired.length} expired trash items.');
     } catch (e) {
@@ -158,7 +229,7 @@ class PhotoRepository {
     required Uint8List masterKey,
   }) async {
     final decryptedBytes = await downloadService.getDecryptedFullPhoto(
-      photoPath: photo.storagePath,
+      photo: photo,
       masterKey: masterKey,
     );
 

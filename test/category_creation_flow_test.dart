@@ -89,44 +89,47 @@ void main() {
 
       // getCategories without forceRefresh returns instantly from cache
       fakeDb.storedCategories.clear(); // Clear DB to prove it serves from cache
-      final immediateCategories =
-          await categoryRepo.getCategories('test-user-id');
+      final immediateCategories = await categoryRepo.getCategories(
+        'test-user-id',
+      );
       expect(immediateCategories.length, equals(1));
       expect(immediateCategories.first.name, equals('Instant Cache Test'));
     });
 
-    test('silent background refresh updates local cache on forceRefresh',
-        () async {
-      await categoryRepo.createCategory(
-        userId: 'test-user-id',
-        name: 'Cat 1',
-        colorValue: 0xFF111111,
-      );
-
-      // Simulate remote DB receiving an external category
-      fakeDb.storedCategories.add(
-        VaultCategory(
-          id: 'remote-cat-2',
+    test(
+      'silent background refresh updates local cache on forceRefresh',
+      () async {
+        await categoryRepo.createCategory(
           userId: 'test-user-id',
-          name: 'Remote Cat',
-          colorValue: 0xFF222222,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
+          name: 'Cat 1',
+          colorValue: 0xFF111111,
+        );
 
-      // Fast get returns cached (1 category)
-      final fastList = await categoryRepo.getCategories('test-user-id');
-      expect(fastList.length, equals(1));
+        // Simulate remote DB receiving an external category
+        fakeDb.storedCategories.add(
+          VaultCategory(
+            id: 'remote-cat-2',
+            userId: 'test-user-id',
+            name: 'Remote Cat',
+            colorValue: 0xFF222222,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
 
-      // Silent background forceRefresh updates the cache to 2 categories
-      final refreshedList = await categoryRepo.getCategories(
-        'test-user-id',
-        forceRefresh: true,
-      );
-      expect(refreshedList.length, equals(2));
-      expect(categoryRepo.cachedCategories!.length, equals(2));
-    });
+        // Fast get returns cached (1 category)
+        final fastList = await categoryRepo.getCategories('test-user-id');
+        expect(fastList.length, equals(1));
+
+        // Silent background forceRefresh updates the cache to 2 categories
+        final refreshedList = await categoryRepo.getCategories(
+          'test-user-id',
+          forceRefresh: true,
+        );
+        expect(refreshedList.length, equals(2));
+        expect(categoryRepo.cachedCategories!.length, equals(2));
+      },
+    );
 
     test('times out if database operation exceeds 10 seconds', () async {
       fakeDb.simulatedDelay = const Duration(seconds: 11);
@@ -153,7 +156,8 @@ void main() {
 
     test('maps PostgrestException RLS permission error code 42501', () {
       const exception = sp.PostgrestException(
-        message: 'new row violates row-level security policy for table "categories"',
+        message:
+            'new row violates row-level security policy for table "categories"',
         code: '42501',
       );
       final msg = ErrorMapper.mapToUserMessage(exception);
@@ -173,7 +177,9 @@ void main() {
         equals('Session expired. Please sign in again.'),
       );
 
-      const authExp = sp.AuthException('Invalid Refresh Token: session expired');
+      const authExp = sp.AuthException(
+        'Invalid Refresh Token: session expired',
+      );
       expect(
         ErrorMapper.mapToUserMessage(authExp),
         equals('Session expired. Please sign in again.'),
@@ -182,8 +188,9 @@ void main() {
   });
 
   group('CreateCategorySheet Widget Tests', () {
-    testWidgets('shows session expired error when user is unauthenticated',
-        (tester) async {
+    testWidgets('shows session expired error when user is unauthenticated', (
+      tester,
+    ) async {
       final fakeDb = FakeSupabaseDatabaseService();
       final categoryRepo = CategoryRepository(databaseService: fakeDb);
 
@@ -191,7 +198,9 @@ void main() {
         ProviderScope(
           overrides: [
             categoryRepositoryProvider.overrideWithValue(categoryRepo),
-            currentUserProvider.overrideWithValue(null), // No authenticated user
+            currentUserProvider.overrideWithValue(
+              null,
+            ), // No authenticated user
           ],
           child: MaterialApp(
             theme: AppTheme.darkTheme,
@@ -209,108 +218,114 @@ void main() {
       await tester.pump();
 
       // Error message should appear and database should NOT have been called
-      expect(find.text('Session expired. Please sign in again.'), findsOneWidget);
+      expect(
+        find.text('Session expired. Please sign in again.'),
+        findsOneWidget,
+      );
       expect(fakeDb.createCategoryCallCount, equals(0));
     });
 
     testWidgets(
-        'successful creation adds category locally, pops sheet, and shows snackbar',
-        (tester) async {
-      final fakeDb = FakeSupabaseDatabaseService();
-      final categoryRepo = CategoryRepository(databaseService: fakeDb);
+      'successful creation adds category locally, pops sheet, and shows snackbar',
+      (tester) async {
+        final fakeDb = FakeSupabaseDatabaseService();
+        final categoryRepo = CategoryRepository(databaseService: fakeDb);
 
-      const mockUser = sp.User(
-        id: 'user-authenticated-uuid',
-        appMetadata: {},
-        userMetadata: {},
-        aud: 'authenticated',
-        createdAt: '2026-01-01T00:00:00Z',
-      );
+        const mockUser = sp.User(
+          id: 'user-authenticated-uuid',
+          appMetadata: {},
+          userMetadata: {},
+          aud: 'authenticated',
+          createdAt: '2026-01-01T00:00:00Z',
+        );
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            categoryRepositoryProvider.overrideWithValue(categoryRepo),
-            currentUserProvider.overrideWithValue(mockUser),
-          ],
-          child: MaterialApp(
-            theme: AppTheme.darkTheme,
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => ElevatedButton(
-                  onPressed: () => CreateCategorySheet.show(context),
-                  child: const Text('Open Sheet'),
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              categoryRepositoryProvider.overrideWithValue(categoryRepo),
+              currentUserProvider.overrideWithValue(mockUser),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.darkTheme,
+              home: Scaffold(
+                body: Builder(
+                  builder: (context) => ElevatedButton(
+                    onPressed: () => CreateCategorySheet.show(context),
+                    child: const Text('Open Sheet'),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Open sheet
-      await tester.tap(find.text('Open Sheet'));
-      await tester.pumpAndSettle();
+        // Open sheet
+        await tester.tap(find.text('Open Sheet'));
+        await tester.pumpAndSettle();
 
-      expect(find.byType(CreateCategorySheet), findsOneWidget);
+        expect(find.byType(CreateCategorySheet), findsOneWidget);
 
-      // Enter name
-      await tester.enterText(find.byType(TextFormField), 'Vacation Vault');
-      await tester.pump();
+        // Enter name
+        await tester.enterText(find.byType(TextFormField), 'Vacation Vault');
+        await tester.pump();
 
-      // Tap Create Category
-      await tester.tap(find.text('Create Category'));
-      await tester.pumpAndSettle();
+        // Tap Create Category
+        await tester.tap(find.text('Create Category'));
+        await tester.pumpAndSettle();
 
-      // Sheet should be popped and SnackBar shown
-      expect(find.byType(CreateCategorySheet), findsNothing);
-      expect(find.text('Category created'), findsOneWidget);
+        // Sheet should be popped and SnackBar shown
+        expect(find.byType(CreateCategorySheet), findsNothing);
+        expect(find.text('Category created'), findsOneWidget);
 
-      // Verify category was created with valid UUID
-      expect(fakeDb.createCategoryCallCount, equals(1));
-      expect(fakeDb.lastCreatedCategory!.name, equals('Vacation Vault'));
-      expect(categoryRepo.cachedCategories!.length, equals(1));
-    });
+        // Verify category was created with valid UUID
+        expect(fakeDb.createCategoryCallCount, equals(1));
+        expect(fakeDb.lastCreatedCategory!.name, equals('Vacation Vault'));
+        expect(categoryRepo.cachedCategories!.length, equals(1));
+      },
+    );
 
     testWidgets(
-        'error during creation displays message and stops loading state',
-        (tester) async {
-      final fakeDb = FakeSupabaseDatabaseService();
-      fakeDb.errorToThrow =
-          const StorageException('Unable to reach server. Try again.');
-      final categoryRepo = CategoryRepository(databaseService: fakeDb);
+      'error during creation displays message and stops loading state',
+      (tester) async {
+        final fakeDb = FakeSupabaseDatabaseService();
+        fakeDb.errorToThrow = const StorageException(
+          'Unable to reach server. Try again.',
+        );
+        final categoryRepo = CategoryRepository(databaseService: fakeDb);
 
-      const mockUser = sp.User(
-        id: 'user-authenticated-uuid',
-        appMetadata: {},
-        userMetadata: {},
-        aud: 'authenticated',
-        createdAt: '2026-01-01T00:00:00Z',
-      );
+        const mockUser = sp.User(
+          id: 'user-authenticated-uuid',
+          appMetadata: {},
+          userMetadata: {},
+          aud: 'authenticated',
+          createdAt: '2026-01-01T00:00:00Z',
+        );
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            categoryRepositoryProvider.overrideWithValue(categoryRepo),
-            currentUserProvider.overrideWithValue(mockUser),
-          ],
-          child: MaterialApp(
-            theme: AppTheme.darkTheme,
-            home: const Scaffold(body: CreateCategorySheet()),
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              categoryRepositoryProvider.overrideWithValue(categoryRepo),
+              currentUserProvider.overrideWithValue(mockUser),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.darkTheme,
+              home: const Scaffold(body: CreateCategorySheet()),
+            ),
           ),
-        ),
-      );
+        );
 
-      await tester.enterText(find.byType(TextFormField), 'Failing Category');
-      await tester.pump();
+        await tester.enterText(find.byType(TextFormField), 'Failing Category');
+        await tester.pump();
 
-      await tester.tap(find.text('Create Category'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Create Category'));
+        await tester.pumpAndSettle();
 
-      // Error viewable
-      expect(find.text('Unable to reach server. Try again.'), findsOneWidget);
+        // Error viewable
+        expect(find.text('Unable to reach server. Try again.'), findsOneWidget);
 
-      // Button is NOT loading anymore (stopped in finally)
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-    });
+        // Button is NOT loading anymore (stopped in finally)
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+      },
+    );
   });
 }

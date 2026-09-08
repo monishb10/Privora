@@ -349,6 +349,23 @@ class SupabaseDatabaseService {
     }
   }
 
+  Future<VaultPhoto?> getPhotoById(String photoId, String userId) async {
+    try {
+      final data = await _client
+          .from(StorageConstants.tablePhotos)
+          .select()
+          .eq('id', photoId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (data == null) return null;
+      return VaultPhoto.fromJson(data);
+    } catch (e) {
+      debugPrint('getPhotoById error: $e');
+      return null;
+    }
+  }
+
   Future<void> updatePhoto(VaultPhoto photo) async {
     try {
       await _client
