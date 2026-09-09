@@ -38,7 +38,7 @@ class VaultRepository {
   /// 4. Generates high-entropy recovery code.
   /// 5. Wraps master key with recovery key and stores in Supabase vault_keys table.
   /// 6. Returns plaintext recovery code to show user ONCE.
-  Future<String> initializeNewVault({
+  Future<void> initializeNewVault({
     required String userId,
     required String pin,
   }) async {
@@ -56,20 +56,108 @@ class VaultRepository {
       // 1. Setup local PIN and local wrapped key namespaced to this user
       await pinService.setupPin(pin: pin, masterKey: masterKey, userId: userId);
 
-      // 2. Generate recovery code & wrap for cloud backup
+      // 2. Read back locally saved PIN envelope
+      final pinSalt = await secureKeyService.getPinSalt(userId);
+      final pinVerifier = await secureKeyService.getPinVerifier(userId);
+      final wrappedMasterKey =
+          await secureKeyService.getWrappedMasterKey(userId);
+      final kekNonce = await secureKeyService.getKekNonce(userId);
+
+      if (pinSalt == null ||
+          pinVerifier == null ||
+          wrappedMasterKey == null ||
+          kekNonce == null) {
+        throw const CryptoException(
+          'Failed to verify local secure PIN envelope persistence.',
+        );
+      }
+
+      // 3. Persist PIN envelope to Supabase vault_keys
+      await databaseService.saveVaultPinEnvelope(
+        userId: userId,
+        pinWrappedKey: wrappedMasterKey,
+        pinSalt: pinSalt,
+        pinNonce: kekNonce,
+        pinVerifier: pinVerifier,
+      );
+    } catch (e) {
+      debugPrint('initializeNewVault error: $e');
+      if (e is CryptoException) rethrow;
+      throw CryptoException('Failed to initialize vault keys: $e');
+    }
+  }
+
+  /// Checks whether user has an active recovery code envelope stored in Supabase
+  Future<bool> hasRecoveryCode(String userId) {
+    return databaseService.hasRecoveryCode(userId);
+  }
+
+  /// Synchronizes server PIN envelope into local secure storage if missing on this device
+  Future<bool> syncServerPinEnvelopeIfMissing(String userId) async {
+    final hasLocal = await hasCompletedSetup(userId);
+    if (hasLocal) return true;
+
+    final serverVault = await getServerVaultData(userId);
+    if (serverVault == null) return false;
+
+    final pinWrappedKey = serverVault['pin_wrapped_key'] as String?;
+    final pinSalt = serverVault['pin_salt'] as String?;
+    final pinNonce = serverVault['pin_nonce'] as String?;
+    final pinVerifier = serverVault['pin_verifier'] as String?;
+
+    if (pinWrappedKey != null &&
+        pinSalt != null &&
+        pinNonce != null &&
+        pinVerifier != null) {
+      await secureKeyService.savePinData(
+        pinSalt: pinSalt,
+        pinVerifier: pinVerifier,
+        wrappedMasterKey: pinWrappedKey,
+        kekNonce: pinNonce,
+        userId: userId,
+      );
+      return true;
+    }
+    return false;
+  }
+
+  /// Generates or replaces an optional recovery code for the user's existing vault master key.
+  /// Strictly requires re-authenticating with current 6-digit PIN.
+  /// Never rotates or re-encrypts photos.
+  Future<String> generateOrReplaceRecoveryCode({
+    required String userId,
+    required String currentPin,
+  }) async {
+    try {
+      // 1. Re-authenticate user with current PIN
+      final isValid = await pinService.verifyAndUnlock(
+        currentPin,
+        userId: userId,
+      );
+      if (!isValid || !pinService.hasActiveKey) {
+        throw const PinException(
+          'Incorrect PIN. Please enter your valid 6-digit PIN.',
+        );
+      }
+
+      final masterKey = pinService.activeMasterKey!;
+
+      // 2. Generate 128-bit cryptographically secure random recovery code
       final recoveryCode = cryptoService.generateRecoveryCode();
       final recoverySalt = cryptoService.generateSalt();
       final recoveryKek = await cryptoService.deriveKeyFromRecoveryCode(
         recoveryCode,
         recoverySalt,
       );
+
+      // 3. Wrap current master key using AES-256-GCM
       final recoveryWrapped = await cryptoService.wrapMasterKey(
         masterKey,
         recoveryKek,
       );
 
-      // 3. Save recovery-wrapped key to Supabase database
-      await databaseService.saveVaultKeys(
+      // 4. Save recovery envelope to Supabase vault_keys
+      await databaseService.saveRecoveryEnvelope(
         userId: userId,
         recoveryWrappedKey: recoveryWrapped['wrappedKey']!,
         recoverySalt: base64Encode(recoverySalt),
@@ -79,9 +167,9 @@ class VaultRepository {
 
       return recoveryCode;
     } catch (e) {
-      debugPrint('initializeNewVault error: $e');
-      if (e is CryptoException) rethrow;
-      throw CryptoException('Failed to initialize vault keys: $e');
+      debugPrint('generateOrReplaceRecoveryCode error: $e');
+      if (e is AppException) rethrow;
+      throw CryptoException('Failed to generate recovery code: $e');
     }
   }
 
@@ -111,9 +199,9 @@ class VaultRepository {
   }) async {
     try {
       final vaultData = await databaseService.getVaultKeys(userId);
-      if (vaultData == null) {
+      if (vaultData == null || vaultData['recovery_wrapped_key'] == null) {
         throw const RecoveryException(
-          'No vault recovery data found for this account.',
+          'No recovery code has been set up for this account.',
         );
       }
 
@@ -140,6 +228,27 @@ class VaultRepository {
         newPin: newPin,
         userId: userId,
       );
+
+      // Read back local PIN envelope
+      final pinSalt = await secureKeyService.getPinSalt(userId);
+      final pinVerifier = await secureKeyService.getPinVerifier(userId);
+      final wrappedMasterKey =
+          await secureKeyService.getWrappedMasterKey(userId);
+      final kekNonce = await secureKeyService.getKekNonce(userId);
+
+      // Also persist updated PIN envelope to Supabase vault_keys
+      if (pinSalt != null &&
+          pinVerifier != null &&
+          wrappedMasterKey != null &&
+          kekNonce != null) {
+        await databaseService.saveVaultPinEnvelope(
+          userId: userId,
+          pinWrappedKey: wrappedMasterKey,
+          pinSalt: pinSalt,
+          pinNonce: kekNonce,
+          pinVerifier: pinVerifier,
+        );
+      }
     } catch (e) {
       debugPrint('recoverVault error: $e');
       if (e is RecoveryException) rethrow;

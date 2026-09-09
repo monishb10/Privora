@@ -153,14 +153,9 @@ void main() {
         expect(find.byType(PrivoraBrandAppBar), findsOneWidget);
         expect(find.text(AppConstants.appName), findsOneWidget);
 
-        // Verify New Category extended FAB is present
-        expect(find.text('New Category'), findsWidgets);
-        final fabFinder = find.byType(FloatingActionButton);
-        expect(fabFinder, findsOneWidget);
-
-        // Verify FAB has bottom margin lifting it above floating navigation
-        final fabBottom = tester.getBottomRight(fabFinder).dy;
-        expect(fabBottom, lessThanOrEqualTo(600.0 - 80.0));
+        // Verify single create-category action when list is empty (no duplicate FAB)
+        expect(find.text('Create your first category'), findsOneWidget);
+        expect(find.byType(FloatingActionButton), findsNothing);
       },
     );
   });

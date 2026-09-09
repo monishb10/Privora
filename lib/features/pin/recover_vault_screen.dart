@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../core/config/supabase_config.dart';
+import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/validators.dart';
@@ -49,9 +51,11 @@ class _RecoverVaultScreenState extends ConsumerState<RecoverVaultScreen> {
     });
 
     try {
-      final user = ref.read(currentUserProvider);
+      final user =
+          ref.read(currentUserProvider) ??
+          SupabaseConfig.client?.auth.currentUser;
       if (user == null) {
-        throw Exception('Please sign in with your email account first.');
+        throw Exception('Please sign in with your Google account first.');
       }
 
       final vaultRepo = ref.read(vaultRepositoryProvider);
@@ -71,7 +75,7 @@ class _RecoverVaultScreenState extends ConsumerState<RecoverVaultScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = ErrorMapper.mapToUserMessage(e);
       });
     } finally {
       if (mounted) {
@@ -84,28 +88,38 @@ class _RecoverVaultScreenState extends ConsumerState<RecoverVaultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Recover Vault'),
-        leading: SizedBox(
-          width: 48,
-          height: 48,
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-            tooltip: 'Back',
-            onPressed: _isLoading
-                ? null
-                : () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go('/unlock');
-                    }
-                  },
+    return PopScope(
+      canPop: !_isLoading,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/unlock');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Recover Vault'),
+          leading: SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              tooltip: 'Back',
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/unlock');
+                      }
+                    },
+            ),
           ),
         ),
-      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -231,6 +245,7 @@ class _RecoverVaultScreenState extends ConsumerState<RecoverVaultScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

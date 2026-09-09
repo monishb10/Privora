@@ -69,10 +69,59 @@ class SupabaseDatabaseService {
         'recovery_wrapped_key': recoveryWrappedKey,
         'recovery_salt': recoverySalt,
         'recovery_nonce': recoveryNonce,
+        'has_recovery_code': true,
         'crypto_version': cryptoVersion,
+        'updated_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
       debugPrint('saveVaultKeys error: $e');
+      throw CryptoException(ErrorMapper.mapToUserMessage(e));
+    }
+  }
+
+  Future<void> saveVaultPinEnvelope({
+    required String userId,
+    required String pinWrappedKey,
+    required String pinSalt,
+    required String pinNonce,
+    required String pinVerifier,
+    int cryptoVersion = 1,
+  }) async {
+    try {
+      await _client.from(StorageConstants.tableVaultKeys).upsert({
+        'user_id': userId,
+        'pin_wrapped_key': pinWrappedKey,
+        'pin_salt': pinSalt,
+        'pin_nonce': pinNonce,
+        'pin_verifier': pinVerifier,
+        'crypto_version': cryptoVersion,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('saveVaultPinEnvelope error: $e');
+      throw CryptoException(ErrorMapper.mapToUserMessage(e));
+    }
+  }
+
+  Future<void> saveRecoveryEnvelope({
+    required String userId,
+    required String recoveryWrappedKey,
+    required String recoverySalt,
+    required String recoveryNonce,
+    int cryptoVersion = 1,
+  }) async {
+    try {
+      await _client.from(StorageConstants.tableVaultKeys).upsert({
+        'user_id': userId,
+        'recovery_wrapped_key': recoveryWrappedKey,
+        'recovery_salt': recoverySalt,
+        'recovery_nonce': recoveryNonce,
+        'has_recovery_code': true,
+        'crypto_version': cryptoVersion,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('saveRecoveryEnvelope error: $e');
       throw CryptoException(ErrorMapper.mapToUserMessage(e));
     }
   }
@@ -88,6 +137,19 @@ class SupabaseDatabaseService {
     } catch (e) {
       debugPrint('getVaultKeys error: $e');
       throw CryptoException(ErrorMapper.mapToUserMessage(e));
+    }
+  }
+
+  Future<bool> hasRecoveryCode(String userId) async {
+    try {
+      final data = await getVaultKeys(userId);
+      if (data == null) return false;
+      final hasCode = data['has_recovery_code'] as bool? ?? false;
+      final recoveryWrappedKey = data['recovery_wrapped_key'] as String?;
+      return hasCode || (recoveryWrappedKey != null && recoveryWrappedKey.isNotEmpty);
+    } catch (e) {
+      debugPrint('hasRecoveryCode error: $e');
+      return false;
     }
   }
 

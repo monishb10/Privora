@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
@@ -110,8 +111,14 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
     });
 
     try {
+      final user =
+          ref.read(currentUserProvider) ??
+          SupabaseConfig.client?.auth.currentUser;
       final vaultRepo = ref.read(vaultRepositoryProvider);
-      final isValid = await vaultRepo.verifyAndUnlock(_enteredPin);
+      final isValid = await vaultRepo.verifyAndUnlock(
+        _enteredPin,
+        userId: user?.id,
+      );
 
       if (!mounted) return;
 
@@ -295,7 +302,20 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                           onDigitPressed: _onDigitPressed,
                           onDeletePressed: _onDeletePressed,
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: (_lockoutSecondsRemaining > 0 || _isVerifying)
+                              ? null
+                              : () => context.push('/recover-vault'),
+                          child: Text(
+                            'Forgot PIN? Use recovery code',
+                            style: AppTypography.labelMedium.copyWith(
+                              color: AppColors.primaryActionBlue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                       ],
                     ),
                   ),

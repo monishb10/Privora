@@ -113,10 +113,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       }
 
       if (!hasLocal) {
-        // Required local key material missing on this device -> Recovery flow
-        context.go('/recover-vault');
-        return;
+        final synced = await vaultRepo.syncServerPinEnvelopeIfMissing(user.id);
+        if (!mounted) return;
+        if (!synced) {
+          // Required local key material missing and no PIN envelope -> Recovery flow
+          context.go('/recover-vault');
+          return;
+        }
       }
+
+      if (!mounted) return;
 
       // Rule: Authenticated and unlocked user -> Categories; otherwise Enter PIN
       if (!isLocked && vaultRepo.hasActiveKey) {

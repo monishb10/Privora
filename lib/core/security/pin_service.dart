@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import '../config/supabase_config.dart';
 import '../constants/app_constants.dart';
 import '../errors/app_exception.dart';
 import '../utils/validators.dart';
@@ -17,13 +19,21 @@ class PinService {
   // Active in-memory master key for current session. Never persisted unencrypted.
   Uint8List? _activeMasterKey;
 
-  PinService({required this.secureKeyService, required this.cryptoService});
+  PinService({
+    required this.secureKeyService,
+    required this.cryptoService,
+  });
 
   /// Returns true if an in-memory master key is available
   bool get hasActiveKey => _activeMasterKey != null;
 
   /// Accessor for active master key in memory
   Uint8List? get activeMasterKey => _activeMasterKey;
+
+  String? _resolveUserId(String? userId) {
+    if (userId != null && userId.isNotEmpty) return userId;
+    return SupabaseConfig.client?.auth.currentUser?.id;
+  }
 
   /// Sets up a new 6-digit PIN and wraps the provided master key
   Future<void> setupPin({
@@ -32,6 +42,7 @@ class PinService {
     String? userId,
   }) async {
     _validatePinFormat(pin);
+    final effectiveUserId = _resolveUserId(userId);
 
     final salt = _cryptoService.generateSalt();
     final verifierBytes = await _cryptoService.derivePinVerifier(pin, salt);
@@ -43,11 +54,11 @@ class PinService {
       pinVerifier: base64Encode(verifierBytes),
       wrappedMasterKey: wrapped['wrappedKey']!,
       kekNonce: wrapped['nonce']!,
-      userId: userId,
+      userId: effectiveUserId,
     );
 
     _activeMasterKey = Uint8List.fromList(masterKey);
-    await _secureKeyService.resetLockout(userId);
+    await _secureKeyService.resetLockout(effectiveUserId);
   }
 
   /// Verifies entered PIN against stored salted verifier.
@@ -55,20 +66,21 @@ class PinService {
   /// If invalid, increments failed attempts and enforces lockout if >= 5.
   Future<bool> verifyAndUnlock(String pin, {String? userId}) async {
     _validatePinFormat(pin);
+    final effectiveUserId = _resolveUserId(userId);
 
     // Check lockout
-    final lockoutUntil = await _secureKeyService.getLockoutUntil(userId);
+    final lockoutUntil = await _secureKeyService.getLockoutUntil(effectiveUserId);
     if (lockoutUntil != null && DateTime.now().isBefore(lockoutUntil)) {
       final remaining = lockoutUntil.difference(DateTime.now()).inSeconds + 1;
       throw PinLockoutException(remaining);
     }
 
-    final saltBase64 = await _secureKeyService.getPinSalt(userId);
-    final verifierBase64 = await _secureKeyService.getPinVerifier(userId);
+    final saltBase64 = await _secureKeyService.getPinSalt(effectiveUserId);
+    final verifierBase64 = await _secureKeyService.getPinVerifier(effectiveUserId);
     final wrappedKeyBase64 = await _secureKeyService.getWrappedMasterKey(
-      userId,
+      effectiveUserId,
     );
-    final kekNonceBase64 = await _secureKeyService.getKekNonce(userId);
+    final kekNonceBase64 = await _secureKeyService.getKekNonce(effectiveUserId);
 
     if (saltBase64 == null ||
         verifierBase64 == null ||
@@ -84,7 +96,7 @@ class PinService {
 
     // Timing-safe comparison
     if (!_constantTimeEquals(enteredVerifier, storedVerifier)) {
-      await _handleFailedAttempt(userId);
+      await _handleFailedAttempt(effectiveUserId);
       return false;
     }
 
@@ -98,7 +110,7 @@ class PinService {
       );
 
       _activeMasterKey = masterKey;
-      await _secureKeyService.resetLockout(userId);
+      await _secureKeyService.resetLockout(effectiveUserId);
       return true;
     } catch (e) {
       throw CryptoException('Failed to unwrap master vault key: $e');

@@ -113,13 +113,43 @@ class FakeDatabaseService extends SupabaseDatabaseService {
     required String recoveryNonce,
     int cryptoVersion = 1,
   }) async {
-    vaults[userId] = {
+    final existing = vaults[userId] ?? {};
+    existing.addAll({
       'user_id': userId,
       'recovery_wrapped_key': recoveryWrappedKey,
       'recovery_salt': recoverySalt,
       'recovery_nonce': recoveryNonce,
+      'has_recovery_code': true,
       'crypto_version': cryptoVersion,
-    };
+    });
+    vaults[userId] = existing;
+  }
+
+  @override
+  Future<void> saveVaultPinEnvelope({
+    required String userId,
+    required String pinWrappedKey,
+    required String pinSalt,
+    required String pinNonce,
+    required String pinVerifier,
+    int cryptoVersion = 1,
+  }) async {
+    final existing = vaults[userId] ?? {'has_recovery_code': false};
+    existing.addAll({
+      'user_id': userId,
+      'pin_wrapped_key': pinWrappedKey,
+      'pin_salt': pinSalt,
+      'pin_nonce': pinNonce,
+      'pin_verifier': pinVerifier,
+      'crypto_version': cryptoVersion,
+      'updated_at': DateTime.now().toIso8601String(),
+    });
+    vaults[userId] = existing;
+  }
+
+  @override
+  Future<bool> hasRecoveryCode(String userId) async {
+    return vaults[userId]?['has_recovery_code'] == true;
   }
 }
 
@@ -156,7 +186,7 @@ void main() {
       () async {
         final fakeStorage = FakeSecureStorage();
         final secureKeyService = SecureKeyService(storage: fakeStorage);
-        final cryptoService = VaultCryptoService();
+        final cryptoService = VaultCryptoService(iterations: 1000);
         final pinService = PinService(
           secureKeyService: secureKeyService,
           cryptoService: cryptoService,
@@ -223,7 +253,7 @@ void main() {
         final fakeStorage = FakeSecureStorage();
         final fakeDb = FakeDatabaseService();
         final secureKeyService = SecureKeyService(storage: fakeStorage);
-        final cryptoService = VaultCryptoService();
+        final cryptoService = VaultCryptoService(iterations: 1000);
         final pinService = PinService(
           secureKeyService: secureKeyService,
           cryptoService: cryptoService,

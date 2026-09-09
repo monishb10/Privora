@@ -1,5 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../config/supabase_config.dart';
 import '../constants/storage_constants.dart';
+import '../errors/app_exception.dart';
 
 /// Manages secure local persistence for tokens, PIN verifiers, and wrapped keys.
 /// Keys are namespaced with the Supabase User ID to guarantee complete cryptographic
@@ -19,8 +21,11 @@ class SecureKeyService {
           );
 
   String _key(String baseKey, [String? userId]) {
-    if (userId != null && userId.isNotEmpty) {
-      return '${userId}_$baseKey';
+    final effectiveId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : SupabaseConfig.client?.auth.currentUser?.id;
+    if (effectiveId != null && effectiveId.isNotEmpty) {
+      return '${effectiveId}_$baseKey';
     }
     return baseKey;
   }
@@ -32,28 +37,41 @@ class SecureKeyService {
     required String kekNonce,
     String? userId,
   }) async {
+    final effectiveUserId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : SupabaseConfig.client?.auth.currentUser?.id;
+
     await Future.wait([
       _storage.write(
-        key: _key(StorageConstants.securePinSalt, userId),
+        key: _key(StorageConstants.securePinSalt, effectiveUserId),
         value: pinSalt,
       ),
       _storage.write(
-        key: _key(StorageConstants.securePinVerifier, userId),
+        key: _key(StorageConstants.securePinVerifier, effectiveUserId),
         value: pinVerifier,
       ),
       _storage.write(
-        key: _key(StorageConstants.securePinWrappedMasterKey, userId),
+        key: _key(StorageConstants.securePinWrappedMasterKey, effectiveUserId),
         value: wrappedMasterKey,
       ),
       _storage.write(
-        key: _key(StorageConstants.securePinKekNonce, userId),
+        key: _key(StorageConstants.securePinKekNonce, effectiveUserId),
         value: kekNonce,
       ),
       _storage.write(
-        key: _key(StorageConstants.secureHasCompletedSetup, userId),
+        key: _key(StorageConstants.secureHasCompletedSetup, effectiveUserId),
         value: 'true',
       ),
     ]);
+
+    // Read back and verify persistence
+    final verifiedSetup = await hasCompletedSetup(effectiveUserId);
+    final verifiedVerifier = await getPinVerifier(effectiveUserId);
+    if (!verifiedSetup || verifiedVerifier == null) {
+      throw const CryptoException(
+        'Failed to verify secure local PIN storage. Please try again.',
+      );
+    }
   }
 
   Future<String?> getPinSalt([String? userId]) async {

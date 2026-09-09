@@ -99,6 +99,23 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     }
   }
 
+  bool _isOpeningCreateSheet = false;
+
+  Future<void> _openCreateCategorySheet() async {
+    if (_isOpeningCreateSheet) return;
+    _isOpeningCreateSheet = true;
+    try {
+      final created = await CreateCategorySheet.show(context);
+      if (created == true && mounted) {
+        ref.invalidate(categoriesProvider);
+      }
+    } finally {
+      if (mounted) {
+        _isOpeningCreateSheet = false;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
@@ -147,7 +164,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             : categoriesAsync.when(
                 data: (categories) {
                   // Deliberate empty state for a new account:
-                  // “Your private space starts here” and “Create your first category.”
+                  // Exactly one centered empty-state button labelled “Create your first category.”
+                  // Zero other create buttons or FABs exist while empty.
                   if (categories.isEmpty) {
                     return EmptyState(
                       icon: Icons.folder_open_rounded,
@@ -155,7 +173,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                       subtitle:
                           'Create your first category to begin organizing and encrypting your private photos.',
                       actionText: 'Create your first category',
-                      onAction: () => CreateCategorySheet.show(context),
+                      onAction: _openCreateCategorySheet,
                     );
                   }
 
@@ -203,7 +221,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                         child: CustomScrollView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           slivers: [
-                            // Tidy section heading with clear New category action
+                            // Tidy section heading with exactly one New Category action
                             SliverToBoxAdapter(
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(
@@ -233,15 +251,14 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                                       ],
                                     ),
                                     TextButton.icon(
-                                      onPressed: () =>
-                                          CreateCategorySheet.show(context),
+                                      onPressed: _openCreateCategorySheet,
                                       icon: const Icon(
                                         Icons.add_circle_outline_rounded,
                                         size: 18,
                                         color: AppColors.primaryActionBlue,
                                       ),
                                       label: Text(
-                                        'New Category',
+                                        'New category',
                                         style: AppTypography.labelLarge
                                             .copyWith(
                                               color:
@@ -330,36 +347,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   onRetry: _isRetrying ? null : _handleRetry,
                 ),
               ),
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.only(bottom: 82),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryActionBlue.withValues(alpha: 0.28),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: FloatingActionButton.extended(
-              elevation: 0,
-              highlightElevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              backgroundColor: AppColors.primaryActionBlue,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add_rounded, size: 22),
-              label: const Text(
-                'New Category',
-                style: AppTypography.buttonText,
-              ),
-              onPressed: () => CreateCategorySheet.show(context),
-            ),
-          ),
-        ),
       ),
     );
   }
