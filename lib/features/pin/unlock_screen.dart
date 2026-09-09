@@ -9,7 +9,6 @@ import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/confirmation_dialog.dart';
-import '../../core/widgets/privora_logo.dart';
 import 'widgets/pin_keyboard.dart';
 
 /// Everyday application unlock screen.
@@ -219,31 +218,36 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                           ),
                         ),
                         const Spacer(flex: 1),
-                        if (isLockedOut)
-                          Container(
-                            width: 72,
-                            height: 72,
-                            decoration: BoxDecoration(
-                              color: AppColors.errorDestructive.withValues(
-                                alpha: 0.1,
-                              ),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.errorDestructive,
-                                width: 1.5,
-                              ),
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: isLockedOut
+                                ? AppColors.errorDestructive.withValues(
+                                    alpha: 0.1,
+                                  )
+                                : AppColors.softBlueSurface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isLockedOut
+                                  ? AppColors.errorDestructive
+                                  : AppColors.borderDivider,
+                              width: 1,
                             ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.lock_clock_outlined,
-                                size: 34,
-                                color: AppColors.errorDestructive,
-                              ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              isLockedOut
+                                  ? Icons.lock_clock_outlined
+                                  : Icons.lock_outline_rounded,
+                              size: 26,
+                              color: isLockedOut
+                                  ? AppColors.errorDestructive
+                                  : AppColors.primaryActionBlue,
                             ),
-                          )
-                        else
-                          const PrivoraLogo(size: 76),
-                        const SizedBox(height: 24),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
                         const Text(
                           'Enter 6-Digit PIN',
                           style: AppTypography.displayMedium,
@@ -257,8 +261,8 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                                 'Enter your PIN to unlock your encrypted photos.',
                             style: AppTypography.bodyMedium.copyWith(
                               color: _hasError || isLockedOut
-                                  ? AppColors.danger
-                                  : AppColors.secondaryText,
+                                  ? AppColors.errorDestructive
+                                  : AppColors.secondaryTextColor,
                             ),
                             textAlign: TextAlign.center,
                           ),

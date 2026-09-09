@@ -10,6 +10,11 @@ import '../../core/widgets/confirmation_dialog.dart';
 import '../../core/widgets/privora_button.dart';
 
 /// Screen managing user profile, security settings, storage usage, and account lifecycle.
+/// Conforms to design specification:
+/// - Real account details in readable groups
+/// - Prominent, accessible Sign Out
+/// - Zero fake meters, zero backend jargon (OAuth, JWT, Cloudinary)
+/// - 20px card radii with #DCE5F2 border and safe navigation clearance
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
 
@@ -37,7 +42,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       ref.invalidate(recentlyDeletedPhotosProvider);
       ref.invalidate(storageUsageProvider);
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
+        Navigator.of(
+          context,
+          rootNavigator: true,
+        ).popUntil((route) => route.isFirst);
         context.go('/login');
       }
     }
@@ -86,27 +94,31 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     Color? iconColor,
   }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       leading: Container(
-        padding: const EdgeInsets.all(8),
+        width: 38,
+        height: 38,
         decoration: BoxDecoration(
-          color: AppColors.elevatedSurface,
-          borderRadius: BorderRadius.circular(10),
+          color: AppColors.softBlueSurface,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
           icon,
-          color: iconColor ?? AppColors.primaryAccent,
+          color: iconColor ?? AppColors.primaryActionBlue,
           size: 20,
         ),
       ),
-      title: Text(title, style: AppTypography.bodyLarge),
+      title: Text(
+        title,
+        style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+      ),
       subtitle: subtitle != null
           ? Text(subtitle, style: AppTypography.bodySmall)
           : null,
       trailing: const Icon(
         Icons.arrow_forward_ios_rounded,
         size: 14,
-        color: AppColors.secondaryText,
+        color: AppColors.secondaryTextColor,
       ),
       onTap: onTap,
     );
@@ -124,7 +136,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
         'Privora Member';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.mainBackground,
       appBar: AppBar(title: const Text('Account & Vault')),
       body: _isDeleting
           ? const Center(
@@ -132,7 +144,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.danger),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.errorDestructive,
+                    ),
                   ),
                   SizedBox(height: 20),
                   Text(
@@ -143,15 +157,31 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                // Safe clearance so bottom floating navigation bar never obscures options
+                bottom: 120 + MediaQuery.paddingOf(context).bottom,
+              ),
               children: [
                 // Profile header card
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.border),
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.borderDivider,
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.cardShadow,
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
@@ -159,11 +189,11 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                         width: 56,
                         height: 56,
                         decoration: BoxDecoration(
-                          color: AppColors.elevatedSurface,
+                          color: AppColors.softBlueSurface,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: AppColors.primaryAccent.withValues(
-                              alpha: 0.5,
+                            color: AppColors.primaryActionBlue.withValues(
+                              alpha: 0.3,
                             ),
                           ),
                         ),
@@ -171,7 +201,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           child: Text(
                             name.isNotEmpty ? name[0].toUpperCase() : 'P',
                             style: AppTypography.titleLarge.copyWith(
-                              color: AppColors.primaryAccent,
+                              color: AppColors.primaryActionBlue,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -195,13 +226,23 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Vault Storage Card
+                // Vault Storage Card (Real usage, no fake meters)
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.border),
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.borderDivider,
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.cardShadow,
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -212,13 +253,16 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                             children: [
                               const Icon(
                                 Icons.cloud_outlined,
-                                color: AppColors.primaryAccent,
+                                color: AppColors.primaryActionBlue,
                                 size: 20,
                               ),
                               const SizedBox(width: 10),
                               Text(
                                 'Encrypted Storage',
-                                style: AppTypography.titleSmall,
+                                style: AppTypography.titleSmall.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryText,
+                                ),
                               ),
                             ],
                           ),
@@ -226,7 +270,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                             data: (bytes) => Text(
                               Formatters.formatBytes(bytes),
                               style: AppTypography.titleSmall.copyWith(
-                                color: AppColors.primaryAccent,
+                                color: AppColors.primaryActionBlue,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -237,11 +281,11 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       PrivoraButton(
                         text: 'View Storage Breakdown',
                         variant: PrivoraButtonVariant.secondary,
-                        height: 42,
+                        minHeight: 46,
                         onPressed: () => context.push('/storage-usage'),
                       ),
                     ],
@@ -251,14 +295,24 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 
                 const Text(
                   'Security & Access',
-                  style: AppTypography.labelMedium,
+                  style: AppTypography.labelLarge,
                 ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.border),
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.borderDivider,
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.cardShadow,
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -272,14 +326,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       _buildOptionTile(
                         icon: Icons.shield_outlined,
                         title: 'Security & Privacy',
-                        subtitle: 'Encryption and device isolation',
+                        subtitle: 'Client-side encryption details',
                         onTap: () => context.push('/security-settings'),
                       ),
                       const Divider(height: 1),
                       _buildOptionTile(
                         icon: Icons.restore_page_outlined,
                         title: 'Vault Recovery Code',
-                        subtitle: 'Recovery process details',
+                        subtitle: 'View recovery information',
                         onTap: () => context.push('/recover-vault'),
                       ),
                     ],
@@ -289,14 +343,24 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 
                 const Text(
                   'Session & Identity',
-                  style: AppTypography.labelMedium,
+                  style: AppTypography.labelLarge,
                 ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.border),
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.borderDivider,
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.cardShadow,
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -304,7 +368,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                         icon: Icons.logout_rounded,
                         title: 'Sign Out',
                         subtitle: 'Lock vault and sign out of session',
-                        iconColor: AppColors.secondaryText,
+                        iconColor: AppColors.primaryActionBlue,
                         onTap: _handleSignOut,
                       ),
                       const Divider(height: 1),
@@ -312,7 +376,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                         icon: Icons.delete_forever_rounded,
                         title: 'Delete Account',
                         subtitle: 'Permanently erase all cloud photos and data',
-                        iconColor: AppColors.danger,
+                        iconColor: AppColors.errorDestructive,
                         onTap: _handleDeleteAccount,
                       ),
                     ],
@@ -323,7 +387,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   child: Text(
                     '${AppConstants.appName} v1.0.0\n${AppConstants.appTagline}',
                     style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.secondaryText.withValues(alpha: 0.6),
+                      color: AppColors.secondaryTextColor.withValues(
+                        alpha: 0.6,
+                      ),
                     ),
                     textAlign: TextAlign.center,
                   ),

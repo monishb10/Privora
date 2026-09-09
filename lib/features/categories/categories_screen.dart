@@ -5,6 +5,7 @@ import '../../app/providers.dart';
 import '../../core/config/supabase_config.dart';
 import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/confirmation_dialog.dart';
 import '../../core/widgets/empty_state.dart';
@@ -16,7 +17,7 @@ import 'create_category_sheet.dart';
 import 'edit_category_sheet.dart';
 
 /// Main screen after PIN unlock displaying the user's private categories.
-/// Strict rule: Zero default categories allowed. Displays empty state for new users.
+/// Strict rule: Zero demo categories allowed. Shows deliberate empty state for new accounts.
 class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
 
@@ -28,7 +29,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   bool _isSearching = false;
   final _searchController = TextEditingController();
   String _searchQuery = '';
-
   bool _isRetrying = false;
 
   @override
@@ -104,7 +104,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     final categoriesAsync = ref.watch(categoriesProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.mainBackground,
       appBar: PrivoraBrandAppBar(
         isSearching: _isSearching,
         searchController: _searchController,
@@ -134,13 +134,15 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             )
           : categoriesAsync.when(
               data: (categories) {
-                // Zero-demo check: If no categories exist, display the required empty state
+                // Deliberate empty state for a new account:
+                // “Your private space starts here” and “Create your first category.”
                 if (categories.isEmpty) {
                   return EmptyState(
-                    icon: Icons.create_new_folder_outlined,
-                    title: 'No categories yet',
-                    subtitle: 'Create your first private collection.',
-                    actionText: 'Create Category',
+                    icon: Icons.folder_open_rounded,
+                    title: 'Your private space starts here',
+                    subtitle:
+                        'Create your first category to begin organizing and encrypting your private photos.',
+                    actionText: 'Create your first category',
                     onAction: () => CreateCategorySheet.show(context),
                   );
                 }
@@ -160,45 +162,141 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                       child: Text(
                         'No categories found matching "$_searchQuery"',
                         style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.secondaryText,
+                          color: AppColors.secondaryTextColor,
                         ),
                       ),
                     ),
                   );
                 }
-                return RefreshIndicator(
-                  color: AppColors.primaryActionBlue,
-                  backgroundColor: AppColors.cardSurface,
-                  onRefresh: _handleRetry,
-                  child: GridView.builder(
-                    padding: EdgeInsets.only(
-                      left: 16,
-                      right: 16,
-                      top: 16,
-                      bottom: 170 + MediaQuery.paddingOf(context).bottom,
-                    ),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: 0.95,
-                        ),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final category = filtered[index];
-                      return CategoryCard(
-                        category: category,
-                        onTap: () => context.push(
-                          '/category/${category.id}',
-                          extra: category,
-                        ),
-                        onEdit: () => EditCategorySheet.show(context, category),
-                        onDelete: () => _handleDeleteCategory(category),
-                      );
-                    },
-                  ),
+
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    final textScaler = MediaQuery.textScalerOf(context);
+                    final isLargeText = textScaler.scale(16) > 22;
+
+                    // Responsive column adaptation:
+                    // 2 columns on normal portrait phones
+                    // 3 columns on wide screens / tablets (> 620px)
+                    // 1 column on narrow width or very large text accessibility mode
+                    final int crossAxisCount = (width > 620)
+                        ? 3
+                        : (width < 320 || isLargeText ? 1 : 2);
+
+                    return RefreshIndicator(
+                      color: AppColors.primaryActionBlue,
+                      backgroundColor: AppColors.cardSurface,
+                      onRefresh: _handleRetry,
+                      child: CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        slivers: [
+                          // Tidy section heading with clear New category action
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                16,
+                                20,
+                                12,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Categories',
+                                        style: AppTypography.sectionTitle,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${categories.length} ${categories.length == 1 ? 'collection' : 'collections'}',
+                                        style: AppTypography.photoCount,
+                                      ),
+                                    ],
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () =>
+                                        CreateCategorySheet.show(context),
+                                    icon: const Icon(
+                                      Icons.add_circle_outline_rounded,
+                                      size: 18,
+                                      color: AppColors.primaryActionBlue,
+                                    ),
+                                    label: Text(
+                                      'New Category',
+                                      style: AppTypography.labelLarge.copyWith(
+                                        color: AppColors.primaryActionBlue,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // Responsive grid
+                          SliverPadding(
+                            padding: EdgeInsets.only(
+                              left: 20,
+                              right: 20,
+                              top: 4,
+                              // Safe bottom margin ensures floating nav capsule never obscures content
+                              bottom:
+                                  120 + MediaQuery.paddingOf(context).bottom,
+                            ),
+                            sliver: SliverGrid(
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    crossAxisSpacing: 14,
+                                    mainAxisSpacing: 14,
+                                    childAspectRatio: isLargeText ? 1.4 : 0.95,
+                                  ),
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final category = filtered[index];
+                                return PrivoraFadeIn(
+                                  delay: Duration(
+                                    milliseconds: (index.clamp(0, 8)) * 30,
+                                  ),
+                                  child: CategoryCard(
+                                    category: category,
+                                    onTap: () => context.push(
+                                      '/category/${category.id}',
+                                      extra: category,
+                                    ),
+                                    onEdit: () => EditCategorySheet.show(
+                                      context,
+                                      category,
+                                    ),
+                                    onDelete: () =>
+                                        _handleDeleteCategory(category),
+                                  ),
+                                );
+                              }, childCount: filtered.length),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
               loading: () => const Center(
@@ -220,9 +318,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryActionBlue.withValues(alpha: 0.30),
+                color: AppColors.primaryActionBlue.withValues(alpha: 0.28),
                 blurRadius: 16,
-                offset: const Offset(0, 6),
+                offset: const Offset(0, 4),
               ),
             ],
           ),

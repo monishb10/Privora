@@ -1,49 +1,48 @@
 import 'package:flutter/material.dart';
 
-/// Centralized color palette for Privora based on the clean, modern
-/// blue-and-white visual identity mandated by the Privora logo.
+/// Centralized color palette for Privora based on the design specification:
+/// A calm, polished private gallery with soft white surfaces, confident blue accents,
+/// elegant spacing, and visually restrained styling.
 class AppColors {
   AppColors._();
 
-  // --- Official Privora Color System ---
-  /// Brand sky blue (#59C8F3) - extracted from the official Privora logo.
-  static const Color brandSkyBlue = Color(0xFF59C8F3);
+  // --- Official Privora Theme Tokens ---
 
-  /// Primary action blue (#0A84C6) - high contrast blue for primary buttons & interactive elements.
-  static const Color primaryActionBlue = Color(0xFF0A84C6);
+  /// App background: #F7F9FD (calm, airy canvas)
+  static const Color mainBackground = Color(0xFFF7F9FD);
 
-  /// Dark blue for emphasis (#075A85) - deep slate blue for key visual anchors.
-  static const Color darkBlue = Color(0xFF075A85);
-  static const Color darkBlueEmphasis = Color(0xFF075A85);
-
-  /// Main app background (#F7FCFF) - light airy clean background.
-  static const Color mainBackground = Color(0xFFF7FCFF);
-
-  /// Card and dialog surface (#FFFFFF) - crisp pure white surfaces.
+  /// Card and sheet surface: #FFFFFF (crisp white)
   static const Color cardSurface = Color(0xFFFFFFFF);
 
-  /// Soft blue surface (#EAF8FE) - delicate light blue for chips, secondary surfaces & badges.
-  static const Color softBlueSurface = Color(0xFFEAF8FE);
+  /// Primary blue: #2B63D9 (confident primary blue for buttons & active indicators)
+  static const Color primaryActionBlue = Color(0xFF2B63D9);
 
-  /// Border and divider line (#C9EAF7) - soft blue borders instead of heavy outlines.
-  static const Color borderDivider = Color(0xFFC9EAF7);
+  /// Pressed primary: #214DB0 (deeper blue for pressed / active interactive states)
+  static const Color pressedPrimary = Color(0xFF214DB0);
 
-  /// Primary readable text (#101820) - near-black for maximum readability on light backgrounds.
-  static const Color primaryText = Color(0xFF101820);
+  /// Soft blue surface: #EBF2FF (gentle tinted background for chips, badges, wash)
+  static const Color softBlueSurface = Color(0xFFEBF2FF);
 
-  /// Secondary text (#52636D) - muted slate for captions, subtitles, and hints.
-  static const Color secondaryTextColor = Color(0xFF52636D);
+  /// Main text: #172B4D (deep navy-slate for high contrast and readability)
+  static const Color primaryText = Color(0xFF172B4D);
 
-  /// Disabled UI elements (#A9BAC3).
-  static const Color disabledElements = Color(0xFFA9BAC3);
+  /// Secondary text: #5D6B82 (muted slate for supporting labels and subtitles)
+  static const Color secondaryTextColor = Color(0xFF5D6B82);
 
-  /// Error & destructive actions (#D92D20).
-  static const Color errorDestructive = Color(0xFFD92D20);
+  /// Decorative border: #DCE5F2 (subtle structure line without harsh outlines)
+  static const Color borderDivider = Color(0xFFDCE5F2);
 
-  /// Success state (#15803D).
-  static const Color successColor = Color(0xFF15803D);
+  /// Success: #18735D (restrained forest-emerald green)
+  static const Color successColor = Color(0xFF18735D);
 
-  // --- Semantic Aliases for Global Consistency ---
+  /// Error/destructive: #B93845 (crimson red for destructive alerts & actions)
+  static const Color errorDestructive = Color(0xFFB93845);
+
+  // --- Brand Heritage Accents (from official Privora logo) ---
+  static const Color brandSkyBlue = Color(0xFF59C8F3);
+  static const Color darkBlueEmphasis = Color(0xFF172B4D);
+
+  // --- Semantic Aliases for Compatibility Across Components ---
   static const Color background = mainBackground;
   static const Color surface = cardSurface;
   static const Color elevatedSurface = softBlueSurface;
@@ -51,30 +50,31 @@ class AppColors {
   static const Color secondaryAccent = brandSkyBlue;
   static const Color mainText = primaryText;
   static const Color secondaryText = secondaryTextColor;
-  static const Color disabled = disabledElements;
+  static const Color disabled = Color(0xFFA6B4C9);
+  static const Color disabledElements = Color(0xFFA6B4C9);
   static const Color danger = errorDestructive;
   static const Color border = borderDivider;
   static const Color success = successColor;
   static const Color surfaceCard = cardSurface;
   static const Color primaryTextColor = primaryText;
-  static const Color subtlePlaceholder = disabledElements;
-  static const Color warning = Color(0xFFE08A00);
+  static const Color subtlePlaceholder = secondaryTextColor;
+  static const Color warning = Color(0xFFD97706);
 
-  // Subtle shadows & overlays (soft blue/dark tint, zero heavy glow)
-  static const Color overlay = Color(0x66101820);
-  static const Color cardShadow = Color(0x0D075A85);
+  // Subtle restrained shadows and overlays
+  static const Color overlay = Color(0x660F172A);
+  static const Color cardShadow = Color(0x0A172B4D);
 
-  // Curated category color palette (clean, modern, vibrant; no dark gold/yellow dominance)
+  // Category palette (used as local accents while respecting the theme)
   static const List<Color> categoryPalette = [
-    Color(0xFF0A84C6), // Primary Action Blue
-    Color(0xFF59C8F3), // Brand Sky Blue
-    Color(0xFF075A85), // Deep Navy Blue
-    Color(0xFF0284C7), // Azure Blue
-    Color(0xFF0D9488), // Clean Teal
-    Color(0xFF15803D), // Emerald Green
-    Color(0xFF6366F1), // Royal Indigo
-    Color(0xFF8B5CF6), // Soft Violet
-    Color(0xFFEC4899), // Warm Rose
-    Color(0xFFF97316), // Coral Amber
+    Color(0xFF2B63D9), // Primary Blue
+    Color(0xFF0284C7), // Sky Blue
+    Color(0xFF0D9488), // Teal
+    Color(0xFF18735D), // Forest Green
+    Color(0xFF6366F1), // Indigo
+    Color(0xFF7C3AED), // Violet
+    Color(0xFFC026D3), // Fuchsia
+    Color(0xFFDB2777), // Rose
+    Color(0xFFEA580C), // Coral Orange
+    Color(0xFF475569), // Slate
   ];
 }

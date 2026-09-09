@@ -9,7 +9,11 @@ import '../../core/utils/validators.dart';
 import '../../core/widgets/privora_button.dart';
 
 /// Modal bottom sheet for creating a new custom photo category.
-/// Uses useRootNavigator: true to render above the application shell and floating navigation.
+/// Conforms to design specification:
+/// - 28px top corners on crisp white surface
+/// - Subtle drag handle, descriptive labels, properly spaced name field
+/// - Accessible color swatches with both check and outline indicators
+/// - Fully reachable with keyboard open; useRootNavigator: true to disable background navigation
 class CreateCategorySheet extends ConsumerStatefulWidget {
   const CreateCategorySheet({super.key});
 
@@ -43,12 +47,9 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
   }
 
   Future<void> _handleCreate() async {
-    // Prevent multiple insert requests when button is tapped repeatedly
     if (_isLoading) return;
-
     if (!_formKey.currentState!.validate()) return;
 
-    // Verify valid Supabase authenticated user before starting request
     final authUser =
         ref.read(currentUserProvider) ??
         SupabaseConfig.client?.auth.currentUser;
@@ -71,7 +72,6 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
     try {
       final categoryRepo = ref.read(categoryRepositoryProvider);
 
-      // Create new category in remote database (times out after 10s if network hangs)
       final createdCategory = await categoryRepo
           .createCategory(
             name: newCategoryName,
@@ -80,15 +80,10 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
           )
           .timeout(const Duration(seconds: 10));
 
-      // Synchronously insert new category into local cache
       ref.read(categoryRepositoryProvider).addCategoryLocally(createdCategory);
-
-      // Invalidate category provider to trigger UI updates
       ref.invalidate(categoriesProvider);
 
       if (!mounted) return;
-
-      // Close modal sheet and return success
       Navigator.of(context).pop(true);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,17 +111,17 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: const BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
           padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
+            left: 20,
+            right: 20,
+            top: 14,
             bottom: 24 + bottomInset,
           ),
           child: Form(
@@ -137,7 +132,7 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
               children: [
                 Center(
                   child: Container(
-                    width: 38,
+                    width: 36,
                     height: 4,
                     decoration: BoxDecoration(
                       color: AppColors.borderDivider,
@@ -146,13 +141,11 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const Text('New Category', style: AppTypography.titleLarge),
-                const SizedBox(height: 6),
+                const Text('New Category', style: AppTypography.sectionTitle),
+                const SizedBox(height: 4),
                 Text(
                   'Create a private collection to organize your encrypted moments.',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.secondaryTextColor,
-                  ),
+                  style: AppTypography.bodySmall,
                 ),
                 const SizedBox(height: 20),
 
@@ -160,11 +153,11 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.errorDestructive.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
+                      color: AppColors.errorDestructive.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: AppColors.errorDestructive.withValues(
-                          alpha: 0.4,
+                          alpha: 0.3,
                         ),
                       ),
                     ),
@@ -186,7 +179,7 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
                   style: AppTypography.bodyLarge,
                   decoration: const InputDecoration(
                     labelText: 'Category Name',
-                    hintText: 'e.g. Travel, Personal, Documents',
+                    hintText: 'e.g. Personal, Trips, Documents',
                     prefixIcon: Icon(
                       Icons.folder_outlined,
                       color: AppColors.secondaryTextColor,
@@ -194,53 +187,61 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
                   ),
                   validator: Validators.validateCategoryName,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 22),
 
                 const Text('Category Color', style: AppTypography.labelMedium),
                 const SizedBox(height: 12),
                 SizedBox(
-                  height: 46,
+                  height: 48,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: AppColors.categoryPalette.length,
                     separatorBuilder: (context, index) =>
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       final color = AppColors.categoryPalette[index];
                       final isSelected =
                           color.toARGB32() == _selectedColor.toARGB32();
 
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedColor = color),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primaryTextColor
-                                  : Colors.transparent,
-                              width: 3,
+                      return Semantics(
+                        button: true,
+                        selected: isSelected,
+                        label: 'Color swatch ${index + 1}',
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedColor = color),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.primaryText
+                                    : AppColors.borderDivider,
+                                width: isSelected ? 2.5 : 1.0,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.45),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
                             ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: color.withValues(alpha: 0.5),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
+                            child: isSelected
+                                ? const Center(
+                                    child: Icon(
+                                      Icons.check_rounded,
+                                      color: Colors.white,
+                                      size: 22,
                                     ),
-                                  ]
+                                  )
                                 : null,
                           ),
-                          child: isSelected
-                              ? const Icon(
-                                  Icons.check_rounded,
-                                  color: Colors.black87,
-                                  size: 22,
-                                )
-                              : null,
                         ),
                       );
                     },

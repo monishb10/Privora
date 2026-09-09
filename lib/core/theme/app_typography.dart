@@ -2,212 +2,243 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
 /// Standard typography system for Privora.
-/// Uses Playfair Display for app title, page titles, auth titles, and section headings.
-/// Uses Inter for category names, photo counts, body text, buttons, inputs, and nav labels.
+/// Uses Playfair Display for the brand logo wordmark.
+/// Uses Manrope (with Inter / sans-serif fallback) for UI text.
+/// Hierarchy: Screen titles ~26-28px, section titles ~19-20px, body ~15-16px, supporting labels ~12-13px.
 class AppTypography {
   AppTypography._();
 
-  /// Serif heading font family (Playfair Display)
+  /// Serif wordmark font family (Playfair Display)
   static const String fontHeading = 'PlayfairDisplay';
 
-  /// Clean sans-serif font family (Inter)
-  static const String fontBody = 'Inter';
+  /// Clean sans-serif UI font family
+  static const String fontBody = 'Manrope';
+
+  /// Fallback chain prioritizing locally bundled fonts, then system sans-serif
+  static const List<String> fontFallbacks = ['Inter', 'Roboto', 'sans-serif'];
 
   /// Default application font family
   static const String fontFamily = fontBody;
 
   // =========================================================================
-  // Playfair Display System (Classical, Elegant, High-Authority)
+  // Brand Header System (Playfair Display)
   // =========================================================================
 
-  /// Privora Brand Title (AppBar / Brand Header) - Playfair Display Bold, 25 px
+  /// Privora Wordmark (App Title) - 27 px Bold
   static const TextStyle brandTitle = TextStyle(
     fontFamily: fontHeading,
-    fontSize: 25,
+    fontSize: 27,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     color: AppColors.primaryText,
     height: 1.2,
   );
 
-  /// Page Title (Auth, Pin, Page headers) - Playfair Display Bold, 28 px
-  static const TextStyle pageTitle = TextStyle(
+  /// Display Large (Hero / Splash) - 28 px Bold
+  static const TextStyle displayLarge = TextStyle(
     fontFamily: fontHeading,
     fontSize: 28,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+    color: AppColors.primaryText,
+    height: 1.2,
+  );
+
+  /// Display Medium (Auth / PIN Headers) - 26 px SemiBold
+  static const TextStyle displayMedium = TextStyle(
+    fontFamily: fontHeading,
+    fontSize: 26,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.3,
+    color: AppColors.primaryText,
+    height: 1.25,
+  );
+
+  // =========================================================================
+  // UI Sans-Serif System (Manrope / Inter / System Fallback)
+  // =========================================================================
+
+  /// Screen Title (e.g. Page Headers) - 27 px Bold
+  static const TextStyle screenTitle = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 27,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.4,
     color: AppColors.primaryText,
     height: 1.25,
   );
 
-  /// Major Section Heading - Playfair Display SemiBold, 22 px
+  /// Section Title (Categories section, sheet headers) - 20 px SemiBold
   static const TextStyle sectionTitle = TextStyle(
-    fontFamily: fontHeading,
-    fontSize: 22,
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 20,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.2,
     color: AppColors.primaryText,
     height: 1.3,
   );
 
-  /// Display Large (Hero Splash / Welcome) - Playfair Display Bold, 30 px
-  static const TextStyle displayLarge = TextStyle(
-    fontFamily: fontHeading,
-    fontSize: 30,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
-    color: AppColors.mainText,
-    height: 1.2,
-  );
-
-  /// Display Medium (Auth Headers / PIN Screens) - Playfair Display Bold, 26 px
-  static const TextStyle displayMedium = TextStyle(
-    fontFamily: fontHeading,
-    fontSize: 26,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.3,
-    color: AppColors.mainText,
-    height: 1.25,
-  );
-
-  // =========================================================================
-  // Inter Sans-Serif System (Crisp, Legible, Functional)
-  // =========================================================================
-
-  /// Category Name - Inter SemiBold, 17 px
-  static const TextStyle categoryName = TextStyle(
+  /// Title Large - 20 px SemiBold (alias)
+  static const TextStyle titleLarge = TextStyle(
     fontFamily: fontBody,
-    fontSize: 17,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 20,
     fontWeight: FontWeight.w600,
-    letterSpacing: -0.1,
-    color: AppColors.mainText,
+    letterSpacing: -0.2,
+    color: AppColors.primaryText,
     height: 1.3,
   );
 
-  /// Photo Counts & Meta Info - Inter Medium, 13 px
-  static const TextStyle photoCount = TextStyle(
+  /// Title Medium (Card titles, dialog headings) - 17 px SemiBold
+  static const TextStyle titleMedium = TextStyle(
     fontFamily: fontBody,
-    fontSize: 13,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.1,
-    color: AppColors.secondaryText,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 17,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.1,
+    color: AppColors.primaryText,
     height: 1.35,
   );
 
-  /// Primary Button Text - Inter SemiBold, 15 px
+  /// Title Small (Subtitles) - 15 px Medium
+  static const TextStyle titleSmall = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 15,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    color: AppColors.secondaryTextColor,
+    height: 1.4,
+  );
+
+  /// Category Name - 16 px SemiBold
+  static const TextStyle categoryName = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.1,
+    color: AppColors.primaryText,
+    height: 1.3,
+  );
+
+  /// Body Large - 16 px Regular
+  static const TextStyle bodyLarge = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.1,
+    color: AppColors.primaryText,
+    height: 1.5,
+  );
+
+  /// Body Medium - 15 px Regular
+  static const TextStyle bodyMedium = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 15,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.15,
+    color: AppColors.primaryText,
+    height: 1.45,
+  );
+
+  /// Body Small (Hints, captions) - 13 px Regular
+  static const TextStyle bodySmall = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.2,
+    color: AppColors.secondaryTextColor,
+    height: 1.4,
+  );
+
+  /// Photo Counts & Meta Info - 13 px Medium
+  static const TextStyle photoCount = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
+    color: AppColors.secondaryTextColor,
+    height: 1.35,
+  );
+
+  /// Primary Button Text - 15.5 px SemiBold
   static const TextStyle buttonText = TextStyle(
     fontFamily: fontBody,
-    fontSize: 15,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 15.5,
     fontWeight: FontWeight.w600,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
     color: Colors.white,
     height: 1.2,
   );
 
-  /// Navigation Label - Inter SemiBold, 11.5 px
+  /// Label Large (Buttons, chips) - 15 px SemiBold
+  static const TextStyle labelLarge = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.2,
+    color: AppColors.primaryText,
+    height: 1.2,
+  );
+
+  /// Label Medium (Inputs, secondary buttons) - 12.5 px Medium
+  static const TextStyle labelMedium = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 12.5,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.3,
+    color: AppColors.secondaryTextColor,
+    height: 1.25,
+  );
+
+  /// Label Small (Navigation captions, tags) - 11.5 px SemiBold
+  static const TextStyle labelSmall = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 11.5,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.3,
+    color: AppColors.secondaryTextColor,
+    height: 1.2,
+  );
+
+  /// Navigation Label - 11.5 px SemiBold
   static const TextStyle navLabel = TextStyle(
     fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
     fontSize: 11.5,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.2,
     height: 1.2,
   );
 
-  /// Title Large - Inter SemiBold, 20 px
-  static const TextStyle titleLarge = TextStyle(
+  /// Page Title alias
+  static const TextStyle pageTitle = TextStyle(
     fontFamily: fontBody,
-    fontSize: 20,
-    fontWeight: FontWeight.w600,
-    letterSpacing: -0.2,
-    color: AppColors.mainText,
-    height: 1.3,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 27,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.4,
+    color: AppColors.primaryText,
+    height: 1.25,
   );
 
-  /// Title Medium - Inter SemiBold, 17 px
-  static const TextStyle titleMedium = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 17,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0,
-    color: AppColors.mainText,
-    height: 1.35,
-  );
-
-  /// Title Small - Inter Medium, 15 px
-  static const TextStyle titleSmall = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 15,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.1,
-    color: AppColors.secondaryText,
-    height: 1.4,
-  );
-
-  /// Body Large - Inter Regular, 16 px
-  static const TextStyle bodyLarge = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0.15,
-    color: AppColors.mainText,
-    height: 1.5,
-  );
-
-  /// Body Medium - Inter Regular, 14 px
-  static const TextStyle bodyMedium = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0.25,
-    color: AppColors.mainText,
-    height: 1.45,
-  );
-
-  /// Body Small - Inter Regular, 12 px
-  static const TextStyle bodySmall = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0.4,
-    color: AppColors.secondaryText,
-    height: 1.4,
-  );
-
-  /// Label Large - Inter SemiBold, 14 px
-  static const TextStyle labelLarge = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.5,
-    color: AppColors.mainText,
-    height: 1.2,
-  );
-
-  /// Label Medium - Inter Medium, 12 px
-  static const TextStyle labelMedium = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.5,
-    color: AppColors.secondaryText,
-    height: 1.2,
-  );
-
-  /// Label Small - Inter SemiBold, 10 px
-  static const TextStyle labelSmall = TextStyle(
-    fontFamily: fontBody,
-    fontSize: 10,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.6,
-    color: AppColors.secondaryText,
-    height: 1.2,
-  );
-
-  /// PIN Digit Display - Inter Bold, 28 px
+  /// PIN Digit Display - 28 px Bold
   static const TextStyle pinDigit = TextStyle(
     fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
     fontSize: 28,
     fontWeight: FontWeight.w700,
-    color: AppColors.mainText,
+    color: AppColors.primaryText,
   );
 }

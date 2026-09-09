@@ -28,13 +28,9 @@ void main() {
       // Let the Future resolve
       await tester.pumpAndSettle();
 
-      // Verify exact empty state text mandated by requirements
-      expect(find.text('No categories yet'), findsOneWidget);
-      expect(
-        find.text('Create your first private collection.'),
-        findsOneWidget,
-      );
-      expect(find.text('Create Category'), findsOneWidget);
+      // Verify exact deliberate empty state mandated by design requirements
+      expect(find.text('Your private space starts here'), findsOneWidget);
+      expect(find.text('Create your first category'), findsOneWidget);
 
       // Verify strictly zero demo categories are displayed
       expect(find.text('Friends'), findsNothing);

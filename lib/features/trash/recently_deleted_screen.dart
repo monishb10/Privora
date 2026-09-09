@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirmation_dialog.dart';
@@ -133,7 +134,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
     final masterKey = ref.watch(vaultRepositoryProvider).activeMasterKey;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.mainBackground,
       appBar: AppBar(
         title: const Text('Recently Deleted'),
         actions: [
@@ -142,7 +143,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                 ? TextButton(
                     onPressed: () => _handleEmptyTrash(photos),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.danger,
+                      foregroundColor: AppColors.errorDestructive,
                     ),
                     child: const Text('Empty Trash'),
                   )
@@ -164,10 +165,11 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
 
           return Column(
             children: [
+              // Retention policy notice
               Container(
-                color: AppColors.elevatedSurface,
+                color: AppColors.softBlueSurface,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
+                  horizontal: 20,
                   vertical: 10,
                 ),
                 child: Row(
@@ -175,13 +177,15 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                     const Icon(
                       Icons.info_outline_rounded,
                       size: 16,
-                      color: AppColors.secondaryText,
+                      color: AppColors.primaryActionBlue,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Items are permanently erased after 30 days.',
-                        style: AppTypography.labelSmall,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.primaryText,
+                        ),
                       ),
                     ),
                   ],
@@ -189,7 +193,13 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
               ),
               Expanded(
                 child: ListView.separated(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 14,
+                    // Safe scrolling clearance for floating navigation capsule
+                    bottom: 120 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   itemCount: photos.length,
                   separatorBuilder: (context, index) =>
                       const SizedBox(height: 10),
@@ -199,20 +209,30 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                     return Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.border),
+                        color: AppColors.cardSurface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.borderDivider,
+                          width: 1.0,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.cardShadow,
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Row(
                         children: [
                           // Thumbnail
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             child: SizedBox(
                               width: 60,
                               height: 60,
                               child: masterKey == null
-                                  ? Container(color: AppColors.elevatedSurface)
+                                  ? Container(color: AppColors.softBlueSurface)
                                   : FutureBuilder<Uint8List>(
                                       future: ref
                                           .read(photoRepositoryProvider)
@@ -222,13 +242,25 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                                           ),
                                       builder: (context, snapshot) {
                                         if (snapshot.hasData) {
-                                          return Image.memory(
-                                            snapshot.data!,
-                                            fit: BoxFit.cover,
+                                          return TweenAnimationBuilder<double>(
+                                            tween: Tween<double>(
+                                              begin: 0.0,
+                                              end: 1.0,
+                                            ),
+                                            duration:
+                                                AppMotion.thumbnailFadeDuration,
+                                            builder: (context, opacity, _) =>
+                                                Opacity(
+                                                  opacity: opacity,
+                                                  child: Image.memory(
+                                                    snapshot.data!,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
                                           );
                                         }
                                         return Container(
-                                          color: AppColors.elevatedSurface,
+                                          color: AppColors.softBlueSurface,
                                         );
                                       },
                                     ),
@@ -253,7 +285,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                                     const Icon(
                                       Icons.timer_outlined,
                                       size: 14,
-                                      color: AppColors.danger,
+                                      color: AppColors.errorDestructive,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
@@ -261,7 +293,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                                         photo.deleteAfter,
                                       ),
                                       style: AppTypography.bodySmall.copyWith(
-                                        color: AppColors.danger,
+                                        color: AppColors.errorDestructive,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -281,7 +313,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                           IconButton(
                             icon: const Icon(
                               Icons.delete_forever_rounded,
-                              color: AppColors.danger,
+                              color: AppColors.errorDestructive,
                             ),
                             tooltip: 'Permanently Delete',
                             onPressed: () => _handlePermanentDelete(photo),
@@ -297,7 +329,9 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
         },
         loading: () => const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryAccent),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              AppColors.primaryActionBlue,
+            ),
           ),
         ),
         error: (err, _) => ErrorView(
@@ -385,10 +419,10 @@ class _PinVerificationDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.cardSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppColors.border),
+        side: const BorderSide(color: AppColors.borderDivider),
       ),
       contentPadding: const EdgeInsets.all(20),
       content: Column(
@@ -414,7 +448,10 @@ class _PinVerificationDialogState
           if (_errorMessage != null) ...[
             Text(
               _errorMessage!,
-              style: const TextStyle(color: AppColors.danger, fontSize: 12),
+              style: const TextStyle(
+                color: AppColors.errorDestructive,
+                fontSize: 12,
+              ),
             ),
             const SizedBox(height: 8),
           ],

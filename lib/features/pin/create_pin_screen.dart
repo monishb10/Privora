@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/widgets/privora_logo.dart';
 import 'widgets/pin_keyboard.dart';
 
 /// Screen where the user initiates setting up a new 6-digit PIN.
@@ -67,8 +66,26 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
                   child: Column(
                     children: [
                       const Spacer(flex: 1),
-                      const PrivoraLogo(size: 72),
-                      const SizedBox(height: 24),
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.softBlueSurface,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.borderDivider,
+                            width: 1,
+                          ),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.lock_outline_rounded,
+                            size: 26,
+                            color: AppColors.primaryActionBlue,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
                       const Text(
                         'Create 6-Digit PIN',
                         style: AppTypography.displayMedium,
@@ -80,7 +97,7 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
                         child: Text(
                           'Choose a 6-digit PIN to secure your private vault on this device.',
                           style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.secondaryText,
+                            color: AppColors.secondaryTextColor,
                           ),
                           textAlign: TextAlign.center,
                         ),

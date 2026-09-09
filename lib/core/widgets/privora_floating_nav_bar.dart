@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_motion.dart';
 import '../theme/app_typography.dart';
 
 class _NavItem {
@@ -10,9 +11,10 @@ class _NavItem {
   const _NavItem({required this.icon, required this.label});
 }
 
-/// Premium floating navigation bar for Privora.
-/// Features a translucent blue-tinted glass aesthetic with BackdropFilter blur,
-/// animated brand-blue pill indicators, and floating geometry.
+/// Polished floating navigation bar for Privora.
+/// Features a floating capsule with a nearly opaque white/soft-blue tint,
+/// delicate border #DCE5F2, restrained shadow, smooth selected-pill transition
+/// over 200 ms, and accessible touch targets.
 class PrivoraFloatingNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -32,90 +34,125 @@ class PrivoraFloatingNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isReduced = AppMotion.isReducedMotion(context);
+
     return SafeArea(
       bottom: true,
       child: Padding(
-        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+        padding: const EdgeInsets.only(left: 20, right: 20, bottom: 10),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(26),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              height: 70,
-              decoration: BoxDecoration(
-                // 86% opacity light-blue / white translucent glass
-                color: const Color(0xDCF7FCFF),
-                borderRadius: BorderRadius.circular(26),
-                border: Border.all(
-                  color: AppColors.brandSkyBlue.withValues(alpha: 0.35),
-                  width: 1.0,
+          borderRadius: BorderRadius.circular(28),
+          child: isReduced
+              // Solid tinted fallback when blur is disabled/expensive
+              ? Container(
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: AppColors.borderDivider,
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.cardShadow,
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: _buildNavRow(),
+                )
+              // Clipped backdrop blur on small surface with nearly opaque soft tint
+              : BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: const Color(0xF5FFFFFF),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: AppColors.borderDivider,
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.cardShadow,
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildNavRow(),
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryActionBlue.withValues(alpha: 0.12),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavRow() {
+    return Row(
+      children: List.generate(_items.length, (index) {
+        final item = _items[index];
+        final isSelected = index == currentIndex;
+
+        return Expanded(
+          child: PrivoraPressable(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onTap(index),
+            child: Semantics(
+              button: true,
+              selected: isSelected,
+              label: '${item.label} tab',
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    duration: AppMotion.navTransitionDuration,
+                    curve: AppMotion.standardCurve,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primaryActionBlue
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      item.icon,
+                      size: 20,
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.secondaryTextColor,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  AnimatedDefaultTextStyle(
+                    duration: AppMotion.navTransitionDuration,
+                    curve: AppMotion.standardCurve,
+                    style: AppTypography.navLabel.copyWith(
+                      color: isSelected
+                          ? AppColors.primaryActionBlue
+                          : AppColors.secondaryTextColor,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
-              child: Row(
-                children: List.generate(_items.length, (index) {
-                  final item = _items[index];
-                  final isSelected = index == currentIndex;
-
-                  return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onTap(index),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeInOut,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primaryActionBlue
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Icon(
-                              item.icon,
-                              size: 20,
-                              color: isSelected
-                                  ? Colors.white
-                                  : AppColors.secondaryTextColor,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeInOut,
-                            style: AppTypography.navLabel.copyWith(
-                              color: isSelected
-                                  ? AppColors.primaryActionBlue
-                                  : AppColors.secondaryTextColor,
-                            ),
-                            child: Text(
-                              item.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
             ),
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 }

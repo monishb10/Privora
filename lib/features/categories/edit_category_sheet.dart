@@ -8,7 +8,11 @@ import '../../core/widgets/privora_button.dart';
 import '../../data/models/vault_category.dart';
 
 /// Modal bottom sheet for updating an existing category name and color.
-/// Uses useRootNavigator: true to render above the application shell and floating navigation.
+/// Conforms to design specification:
+/// - 28px top corners on crisp white surface
+/// - Subtle drag handle, descriptive labels, properly spaced name field
+/// - Accessible color swatches with both check and outline indicators
+/// - Fully reachable with keyboard open; useRootNavigator: true to disable background navigation
 class EditCategorySheet extends ConsumerStatefulWidget {
   final VaultCategory category;
 
@@ -86,17 +90,17 @@ class _EditCategorySheetState extends ConsumerState<EditCategorySheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: const BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
           padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
+            left: 20,
+            right: 20,
+            top: 14,
             bottom: 24 + bottomInset,
           ),
           child: Form(
@@ -105,9 +109,10 @@ class _EditCategorySheetState extends ConsumerState<EditCategorySheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Subtle handle
                 Center(
                   child: Container(
-                    width: 38,
+                    width: 36,
                     height: 4,
                     decoration: BoxDecoration(
                       color: AppColors.borderDivider,
@@ -116,18 +121,23 @@ class _EditCategorySheetState extends ConsumerState<EditCategorySheet> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const Text('Edit Category', style: AppTypography.titleLarge),
+                const Text('Edit Category', style: AppTypography.sectionTitle),
+                const SizedBox(height: 4),
+                Text(
+                  'Update the collection name and accent color.',
+                  style: AppTypography.bodySmall,
+                ),
                 const SizedBox(height: 20),
 
                 if (_errorMessage != null) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.errorDestructive.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
+                      color: AppColors.errorDestructive.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: AppColors.errorDestructive.withValues(
-                          alpha: 0.4,
+                          alpha: 0.3,
                         ),
                       ),
                     ),
@@ -142,66 +152,77 @@ class _EditCategorySheetState extends ConsumerState<EditCategorySheet> {
                   const SizedBox(height: 16),
                 ],
 
+                // Properly spaced category name field
                 TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
                   style: AppTypography.bodyLarge,
                   decoration: const InputDecoration(
                     labelText: 'Category Name',
+                    hintText: 'Enter category name',
                     prefixIcon: Icon(
-                      Icons.edit_outlined,
+                      Icons.folder_outlined,
                       color: AppColors.secondaryTextColor,
                     ),
                   ),
                   validator: Validators.validateCategoryName,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 22),
 
                 const Text('Category Color', style: AppTypography.labelMedium),
                 const SizedBox(height: 12),
+                // Accessible color swatches with both check AND outline indicators
                 SizedBox(
-                  height: 46,
+                  height: 48,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: AppColors.categoryPalette.length,
                     separatorBuilder: (context, index) =>
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       final color = AppColors.categoryPalette[index];
                       final isSelected =
                           color.toARGB32() == _selectedColor.toARGB32();
 
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedColor = color),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primaryTextColor
-                                  : Colors.transparent,
-                              width: 3,
+                      return Semantics(
+                        button: true,
+                        selected: isSelected,
+                        label: 'Color swatch ${index + 1}',
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedColor = color),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.primaryText
+                                    : AppColors.borderDivider,
+                                width: isSelected ? 2.5 : 1.0,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.45),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
                             ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: color.withValues(alpha: 0.5),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
+                            child: isSelected
+                                ? const Center(
+                                    child: Icon(
+                                      Icons.check_rounded,
+                                      color: Colors.white,
+                                      size: 22,
                                     ),
-                                  ]
+                                  )
                                 : null,
                           ),
-                          child: isSelected
-                              ? const Icon(
-                                  Icons.check_rounded,
-                                  color: Colors.black87,
-                                  size: 22,
-                                )
-                              : null,
                         ),
                       );
                     },
@@ -209,7 +230,7 @@ class _EditCategorySheetState extends ConsumerState<EditCategorySheet> {
                 ),
                 const SizedBox(height: 28),
 
-                // Both Cancel and Save Changes visible
+                // Reachable action buttons with consistent hierarchy
                 Row(
                   children: [
                     Expanded(

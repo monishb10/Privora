@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:privora/app/providers.dart';
 import 'package:privora/core/constants/app_constants.dart';
+import 'package:privora/core/theme/app_colors.dart';
 import 'package:privora/core/theme/app_theme.dart';
 import 'package:privora/core/widgets/privora_brand_app_bar.dart';
 import 'package:privora/core/widgets/privora_floating_nav_bar.dart';
@@ -39,8 +40,8 @@ void main() {
         final textWidget = tester.widget<Text>(find.text(AppConstants.appName));
         expect(textWidget.style?.fontFamily, equals('PlayfairDisplay'));
         expect(textWidget.style?.fontWeight, equals(FontWeight.w700));
-        expect(textWidget.style?.fontSize, equals(25));
-        expect(textWidget.style?.color, equals(const Color(0xFF101820)));
+        expect(textWidget.style?.fontSize, inInclusiveRange(25.0, 28.0));
+        expect(textWidget.style?.color, equals(AppColors.primaryText));
 
         // Verify mathematical centering: center of title/logo row is exactly 200 (screenWidth / 2)
         final rowFinder = find

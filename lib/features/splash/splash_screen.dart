@@ -47,8 +47,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // 1. Startup disk hygiene: clean any leftover unencrypted files
     await ref.read(temporaryFileCleanerProvider).cleanTemporaryFiles();
 
-    // Minimal delay for smooth brand presentation without artificial wait
-    await Future.delayed(const Duration(milliseconds: 700));
+    // Minimal tick for smooth frame initialization without artificial delay
+    await Future.delayed(const Duration(milliseconds: 100));
     if (!mounted) return;
 
     final authRepo = ref.read(authRepositoryProvider);
