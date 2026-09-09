@@ -128,6 +128,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
           userId: user.id,
           categoryId: widget.categoryId,
           masterKey: masterKey,
+          deleteSourceFile: false,
           onStateChanged: (state) {
             if (mounted) {
               setState(() {

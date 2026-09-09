@@ -57,61 +57,28 @@ class SecureKeyService {
   }
 
   Future<String?> getPinSalt([String? userId]) async {
-    final namespaced = await _storage.read(
-      key: _key(StorageConstants.securePinSalt, userId),
-    );
-    if (namespaced != null) return namespaced;
-    if (userId != null) {
-      return _storage.read(key: StorageConstants.securePinSalt);
-    }
-    return null;
+    return _storage.read(key: _key(StorageConstants.securePinSalt, userId));
   }
 
   Future<String?> getPinVerifier([String? userId]) async {
-    final namespaced = await _storage.read(
-      key: _key(StorageConstants.securePinVerifier, userId),
-    );
-    if (namespaced != null) return namespaced;
-    if (userId != null) {
-      return _storage.read(key: StorageConstants.securePinVerifier);
-    }
-    return null;
+    return _storage.read(key: _key(StorageConstants.securePinVerifier, userId));
   }
 
   Future<String?> getWrappedMasterKey([String? userId]) async {
-    final namespaced = await _storage.read(
+    return _storage.read(
       key: _key(StorageConstants.securePinWrappedMasterKey, userId),
     );
-    if (namespaced != null) return namespaced;
-    if (userId != null) {
-      return _storage.read(key: StorageConstants.securePinWrappedMasterKey);
-    }
-    return null;
   }
 
   Future<String?> getKekNonce([String? userId]) async {
-    final namespaced = await _storage.read(
-      key: _key(StorageConstants.securePinKekNonce, userId),
-    );
-    if (namespaced != null) return namespaced;
-    if (userId != null) {
-      return _storage.read(key: StorageConstants.securePinKekNonce);
-    }
-    return null;
+    return _storage.read(key: _key(StorageConstants.securePinKekNonce, userId));
   }
 
   Future<bool> hasCompletedSetup([String? userId]) async {
     final val = await _storage.read(
       key: _key(StorageConstants.secureHasCompletedSetup, userId),
     );
-    if (val != null) return val == 'true';
-    if (userId != null) {
-      final legacy = await _storage.read(
-        key: StorageConstants.secureHasCompletedSetup,
-      );
-      return legacy == 'true';
-    }
-    return false;
+    return val == 'true';
   }
 
   Future<int> getFailedAttempts([String? userId]) async {

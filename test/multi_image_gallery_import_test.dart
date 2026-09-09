@@ -26,6 +26,7 @@ class MockBatchPhotoUploadService extends PhotoUploadService {
     required String categoryId,
     required Uint8List masterKey,
     String? customDisplayName,
+    bool deleteSourceFile = true,
     void Function(UploadState state)? onStateChanged,
   }) async {
     final fileName = sourceFile.path;

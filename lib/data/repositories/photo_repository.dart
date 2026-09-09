@@ -47,6 +47,7 @@ class PhotoRepository {
     required String categoryId,
     required Uint8List masterKey,
     String? customDisplayName,
+    bool deleteSourceFile = true,
     void Function(UploadState state)? onStateChanged,
   }) {
     return uploadService.uploadPhoto(
@@ -55,6 +56,7 @@ class PhotoRepository {
       categoryId: categoryId,
       masterKey: masterKey,
       customDisplayName: customDisplayName,
+      deleteSourceFile: deleteSourceFile,
       onStateChanged: onStateChanged,
     );
   }

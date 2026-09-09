@@ -41,6 +41,7 @@ class PhotoUploadService {
     required String categoryId,
     required Uint8List masterKey,
     String? customDisplayName,
+    bool deleteSourceFile = true,
     void Function(UploadState state)? onStateChanged,
   }) async {
     final photoId = uuid.v4();
@@ -154,8 +155,10 @@ class PhotoUploadService {
 
         final insertedPhoto = await databaseService.insertPhoto(photo);
 
-        // 8. Clean up local source file
-        await cleaner.deleteSingleFile(sourceFile.path);
+        // 8. Clean up local source file if requested (e.g. temporary camera captures)
+        if (deleteSourceFile) {
+          await cleaner.deleteSingleFile(sourceFile.path);
+        }
 
         update(UploadStatus.completed, 1.0);
         return insertedPhoto;
@@ -205,7 +208,9 @@ class PhotoUploadService {
         );
 
         final insertedPhoto = await databaseService.insertPhoto(photo);
-        await cleaner.deleteSingleFile(sourceFile.path);
+        if (deleteSourceFile) {
+          await cleaner.deleteSingleFile(sourceFile.path);
+        }
 
         update(UploadStatus.completed, 1.0);
         return insertedPhoto;
@@ -242,8 +247,10 @@ class PhotoUploadService {
         }
       }
 
-      // Clean local temporary files
-      await cleaner.deleteSingleFile(sourceFile.path);
+      // Clean local temporary files only if requested
+      if (deleteSourceFile) {
+        await cleaner.deleteSingleFile(sourceFile.path);
+      }
 
       update(UploadStatus.error, 0.0, e.toString());
       rethrow;

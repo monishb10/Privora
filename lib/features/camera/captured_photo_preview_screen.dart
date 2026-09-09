@@ -65,6 +65,7 @@ class _CapturedPhotoPreviewScreenState
         userId: user.id,
         categoryId: widget.categoryId,
         masterKey: masterKey,
+        deleteSourceFile: true,
         customDisplayName:
             'Camera_${DateTime.now().millisecondsSinceEpoch}.jpg',
         onStateChanged: (state) {

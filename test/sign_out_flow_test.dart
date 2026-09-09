@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:privora/app/providers.dart';
 import 'package:privora/core/security/pin_service.dart';
 import 'package:privora/core/security/secure_key_service.dart';
-import 'package:privora/core/security/session_lock_service.dart';
 import 'package:privora/core/security/temporary_file_cleaner.dart';
 import 'package:privora/core/security/vault_crypto_service.dart';
 import 'package:privora/core/widgets/confirmation_dialog.dart';
@@ -119,13 +118,19 @@ void main() {
         lockNotifier.unlock();
 
         expect(pinService.hasActiveKey, isTrue);
-        expect(container.read(sessionLockServiceProvider), isFalse); // False = unlocked
+        expect(
+          container.read(sessionLockServiceProvider),
+          isFalse,
+        ); // False = unlocked
 
         // Execute Sign Out
         await authRepo.signOut();
 
         // 1. Session must be locked
-        expect(container.read(sessionLockServiceProvider), isTrue); // True = locked
+        expect(
+          container.read(sessionLockServiceProvider),
+          isTrue,
+        ); // True = locked
 
         // 2. Active master key in memory must be completely cleared
         expect(pinService.hasActiveKey, isFalse);
