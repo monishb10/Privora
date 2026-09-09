@@ -348,13 +348,18 @@ class _PrivateCameraScreenState extends ConsumerState<PrivateCameraScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    color: Colors.white,
-                    size: 28,
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                  onPressed: () => Navigator.of(context).pop(),
                 ),
                 GestureDetector(
                   onTap: _showCategoryPickerSheet,

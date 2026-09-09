@@ -99,126 +99,151 @@ class _CapturedPhotoPreviewScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Preview of captured image from private cache
-          Image.file(File(widget.imagePath), fit: BoxFit.contain),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (!_isUploading) {
+          await _handleRetake();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Preview of captured image from private cache
+            Image.file(File(widget.imagePath), fit: BoxFit.contain),
 
-          // Top Header
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            left: 16,
-            right: 16,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppColors.primaryAccent.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.shield_outlined,
-                        size: 16,
-                        color: AppColors.primaryAccent,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Destination: ${widget.categoryName}',
-                        style: AppTypography.labelSmall.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bottom Action Bar
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
-                bottom: MediaQuery.of(context).padding.bottom + 20,
-              ),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [Colors.black87, Colors.transparent],
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+            // Top Header with Discard/Back button and destination badge
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 16,
+              right: 16,
+              child: Row(
                 children: [
-                  if (_errorMessage != null) ...[
-                    Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: AppColors.danger),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                      tooltip: 'Discard and Retake',
+                      onPressed: _isUploading ? null : _handleRetake,
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_isUploading) ...[
-                    LinearProgressIndicator(
-                      value: _uploadState.progress,
-                      color: AppColors.primaryAccent,
-                      backgroundColor: AppColors.border,
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _uploadState.statusMessage,
-                      style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.secondaryText,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.primaryAccent.withValues(alpha: 0.5),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                  ],
-                  Row(
-                    children: [
-                      Expanded(
-                        child: PrivoraButton(
-                          text: 'Retake',
-                          variant: PrivoraButtonVariant.secondary,
-                          leadingIcon: Icons.refresh_rounded,
-                          onPressed: _isUploading ? null : _handleRetake,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.shield_outlined,
+                          size: 16,
+                          color: AppColors.primaryAccent,
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: PrivoraButton(
-                          text: 'Encrypt & Save',
-                          variant: PrivoraButtonVariant.primary,
-                          leadingIcon: Icons.lock_outline_rounded,
-                          isLoading: _isUploading,
-                          onPressed: _isUploading ? null : _handleConfirmUpload,
+                        const SizedBox(width: 6),
+                        Text(
+                          'Destination: ${widget.categoryName}',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+
+            // Bottom Action Bar
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.only(
+                  left: 24,
+                  right: 24,
+                  top: 24,
+                  bottom: MediaQuery.of(context).padding.bottom + 20,
+                ),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.black87, Colors.transparent],
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_errorMessage != null) ...[
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_isUploading) ...[
+                      LinearProgressIndicator(
+                        value: _uploadState.progress,
+                        color: AppColors.primaryAccent,
+                        backgroundColor: AppColors.border,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _uploadState.statusMessage,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: PrivoraButton(
+                            text: 'Retake',
+                            variant: PrivoraButtonVariant.secondary,
+                            leadingIcon: Icons.refresh_rounded,
+                            onPressed: _isUploading ? null : _handleRetake,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: PrivoraButton(
+                            text: 'Encrypt & Save',
+                            variant: PrivoraButtonVariant.primary,
+                            leadingIcon: Icons.lock_outline_rounded,
+                            isLoading: _isUploading,
+                            onPressed: _isUploading
+                                ? null
+                                : _handleConfirmUpload,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

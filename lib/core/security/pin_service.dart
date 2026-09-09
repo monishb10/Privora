@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import '../constants/app_constants.dart';
 import '../errors/app_exception.dart';
+import '../utils/validators.dart';
 import 'secure_key_service.dart';
 import 'vault_crypto_service.dart';
 
@@ -144,8 +145,7 @@ class PinService {
 
   /// Validates format of a 6-digit PIN
   static void _validatePinFormat(String pin) {
-    if (pin.length != AppConstants.pinLength ||
-        !RegExp(r'^[0-9]{6}$').hasMatch(pin)) {
+    if (!Validators.isSixDigitPin(pin)) {
       throw const ValidationException(
         'PIN must contain exactly 6 numeric digits.',
       );

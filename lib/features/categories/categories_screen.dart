@@ -103,238 +103,261 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.mainBackground,
-      appBar: PrivoraBrandAppBar(
-        isSearching: _isSearching,
-        searchController: _searchController,
-        onSearchChanged: (val) =>
-            setState(() => _searchQuery = val.trim().toLowerCase()),
-        onToggleSearch: () {
+    return PopScope(
+      canPop: !_isSearching,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_isSearching) {
           setState(() {
-            if (_isSearching) {
-              _searchController.clear();
-              _searchQuery = '';
-            }
-            _isSearching = !_isSearching;
+            _isSearching = false;
+            _searchController.clear();
+            _searchQuery = '';
           });
-        },
-        onLock: () {
-          ref.read(sessionLockServiceProvider.notifier).lock();
-          context.go('/unlock');
-        },
-      ),
-      body: _isRetrying
-          ? const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.primaryActionBlue,
-                ),
-              ),
-            )
-          : categoriesAsync.when(
-              data: (categories) {
-                // Deliberate empty state for a new account:
-                // “Your private space starts here” and “Create your first category.”
-                if (categories.isEmpty) {
-                  return EmptyState(
-                    icon: Icons.folder_open_rounded,
-                    title: 'Your private space starts here',
-                    subtitle:
-                        'Create your first category to begin organizing and encrypting your private photos.',
-                    actionText: 'Create your first category',
-                    onAction: () => CreateCategorySheet.show(context),
-                  );
-                }
-
-                final filtered = _searchQuery.isEmpty
-                    ? categories
-                    : categories
-                          .where(
-                            (c) => c.name.toLowerCase().contains(_searchQuery),
-                          )
-                          .toList();
-
-                if (filtered.isEmpty && _searchQuery.isNotEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Text(
-                        'No categories found matching "$_searchQuery"',
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.secondaryTextColor,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    final textScaler = MediaQuery.textScalerOf(context);
-                    final isLargeText = textScaler.scale(16) > 22;
-
-                    // Responsive column adaptation:
-                    // 2 columns on normal portrait phones
-                    // 3 columns on wide screens / tablets (> 620px)
-                    // 1 column on narrow width or very large text accessibility mode
-                    final int crossAxisCount = (width > 620)
-                        ? 3
-                        : (width < 320 || isLargeText ? 1 : 2);
-
-                    return RefreshIndicator(
-                      color: AppColors.primaryActionBlue,
-                      backgroundColor: AppColors.cardSurface,
-                      onRefresh: _handleRetry,
-                      child: CustomScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        slivers: [
-                          // Tidy section heading with clear New category action
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                16,
-                                20,
-                                12,
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Categories',
-                                        style: AppTypography.sectionTitle,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${categories.length} ${categories.length == 1 ? 'collection' : 'collections'}',
-                                        style: AppTypography.photoCount,
-                                      ),
-                                    ],
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: () =>
-                                        CreateCategorySheet.show(context),
-                                    icon: const Icon(
-                                      Icons.add_circle_outline_rounded,
-                                      size: 18,
-                                      color: AppColors.primaryActionBlue,
-                                    ),
-                                    label: Text(
-                                      'New Category',
-                                      style: AppTypography.labelLarge.copyWith(
-                                        color: AppColors.primaryActionBlue,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          // Responsive grid
-                          SliverPadding(
-                            padding: EdgeInsets.only(
-                              left: 20,
-                              right: 20,
-                              top: 4,
-                              // Safe bottom margin ensures floating nav capsule never obscures content
-                              bottom:
-                                  120 + MediaQuery.paddingOf(context).bottom,
-                            ),
-                            sliver: SliverGrid(
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: crossAxisCount,
-                                    crossAxisSpacing: 14,
-                                    mainAxisSpacing: 14,
-                                    childAspectRatio: isLargeText ? 1.4 : 0.95,
-                                  ),
-                              delegate: SliverChildBuilderDelegate((
-                                context,
-                                index,
-                              ) {
-                                final category = filtered[index];
-                                return PrivoraFadeIn(
-                                  delay: Duration(
-                                    milliseconds: (index.clamp(0, 8)) * 30,
-                                  ),
-                                  child: CategoryCard(
-                                    category: category,
-                                    onTap: () => context.push(
-                                      '/category/${category.id}',
-                                      extra: category,
-                                    ),
-                                    onEdit: () => EditCategorySheet.show(
-                                      context,
-                                      category,
-                                    ),
-                                    onDelete: () =>
-                                        _handleDeleteCategory(category),
-                                  ),
-                                );
-                              }, childCount: filtered.length),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.mainBackground,
+        appBar: PrivoraBrandAppBar(
+          isSearching: _isSearching,
+          searchController: _searchController,
+          onSearchChanged: (val) =>
+              setState(() => _searchQuery = val.trim().toLowerCase()),
+          onToggleSearch: () {
+            setState(() {
+              if (_isSearching) {
+                _searchController.clear();
+                _searchQuery = '';
+              }
+              _isSearching = !_isSearching;
+            });
+          },
+          onLock: () {
+            ref.read(sessionLockServiceProvider.notifier).lock();
+            context.go('/unlock');
+          },
+        ),
+        body: _isRetrying
+            ? const Center(
                 child: CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(
                     AppColors.primaryActionBlue,
                   ),
                 ),
+              )
+            : categoriesAsync.when(
+                data: (categories) {
+                  // Deliberate empty state for a new account:
+                  // “Your private space starts here” and “Create your first category.”
+                  if (categories.isEmpty) {
+                    return EmptyState(
+                      icon: Icons.folder_open_rounded,
+                      title: 'Your private space starts here',
+                      subtitle:
+                          'Create your first category to begin organizing and encrypting your private photos.',
+                      actionText: 'Create your first category',
+                      onAction: () => CreateCategorySheet.show(context),
+                    );
+                  }
+
+                  final filtered = _searchQuery.isEmpty
+                      ? categories
+                      : categories
+                            .where(
+                              (c) =>
+                                  c.name.toLowerCase().contains(_searchQuery),
+                            )
+                            .toList();
+
+                  if (filtered.isEmpty && _searchQuery.isNotEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Text(
+                          'No categories found matching "$_searchQuery"',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.secondaryTextColor,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final textScaler = MediaQuery.textScalerOf(context);
+                      final isLargeText = textScaler.scale(16) > 22;
+
+                      // Responsive column adaptation:
+                      // 2 columns on normal portrait phones
+                      // 3 columns on wide screens / tablets (> 620px)
+                      // 1 column on narrow width or very large text accessibility mode
+                      final int crossAxisCount = (width > 620)
+                          ? 3
+                          : (width < 320 || isLargeText ? 1 : 2);
+
+                      return RefreshIndicator(
+                        color: AppColors.primaryActionBlue,
+                        backgroundColor: AppColors.cardSurface,
+                        onRefresh: _handleRetry,
+                        child: CustomScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          slivers: [
+                            // Tidy section heading with clear New category action
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  16,
+                                  20,
+                                  12,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Categories',
+                                          style: AppTypography.sectionTitle,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${categories.length} ${categories.length == 1 ? 'collection' : 'collections'}',
+                                          style: AppTypography.photoCount,
+                                        ),
+                                      ],
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: () =>
+                                          CreateCategorySheet.show(context),
+                                      icon: const Icon(
+                                        Icons.add_circle_outline_rounded,
+                                        size: 18,
+                                        color: AppColors.primaryActionBlue,
+                                      ),
+                                      label: Text(
+                                        'New Category',
+                                        style: AppTypography.labelLarge
+                                            .copyWith(
+                                              color:
+                                                  AppColors.primaryActionBlue,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // Responsive grid
+                            SliverPadding(
+                              padding: EdgeInsets.only(
+                                left: 20,
+                                right: 20,
+                                top: 4,
+                                // Safe bottom margin ensures floating nav capsule never obscures content
+                                bottom:
+                                    120 + MediaQuery.paddingOf(context).bottom,
+                              ),
+                              sliver: SliverGrid(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      crossAxisSpacing: 14,
+                                      mainAxisSpacing: 14,
+                                      childAspectRatio: isLargeText
+                                          ? 1.4
+                                          : 0.95,
+                                    ),
+                                delegate: SliverChildBuilderDelegate((
+                                  context,
+                                  index,
+                                ) {
+                                  final category = filtered[index];
+                                  return PrivoraFadeIn(
+                                    delay: Duration(
+                                      milliseconds: (index.clamp(0, 8)) * 30,
+                                    ),
+                                    child: CategoryCard(
+                                      category: category,
+                                      onTap: () => context.push(
+                                        '/category/${category.id}',
+                                        extra: category,
+                                      ),
+                                      onEdit: () => EditCategorySheet.show(
+                                        context,
+                                        category,
+                                      ),
+                                      onDelete: () =>
+                                          _handleDeleteCategory(category),
+                                    ),
+                                  );
+                                }, childCount: filtered.length),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primaryActionBlue,
+                    ),
+                  ),
+                ),
+                error: (err, _) => ErrorView(
+                  message: ErrorMapper.mapToUserMessage(err),
+                  onRetry: _isRetrying ? null : _handleRetry,
+                ),
               ),
-              error: (err, _) => ErrorView(
-                message: ErrorMapper.mapToUserMessage(err),
-                onRetry: _isRetrying ? null : _handleRetry,
-              ),
-            ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 82),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryActionBlue.withValues(alpha: 0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: FloatingActionButton.extended(
-            elevation: 0,
-            highlightElevation: 2,
-            shape: RoundedRectangleBorder(
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 82),
+          child: Container(
+            decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryActionBlue.withValues(alpha: 0.28),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            backgroundColor: AppColors.primaryActionBlue,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.add_rounded, size: 22),
-            label: const Text('New Category', style: AppTypography.buttonText),
-            onPressed: () => CreateCategorySheet.show(context),
+            child: FloatingActionButton.extended(
+              elevation: 0,
+              highlightElevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              backgroundColor: AppColors.primaryActionBlue,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded, size: 22),
+              label: const Text(
+                'New Category',
+                style: AppTypography.buttonText,
+              ),
+              onPressed: () => CreateCategorySheet.show(context),
+            ),
           ),
         ),
       ),

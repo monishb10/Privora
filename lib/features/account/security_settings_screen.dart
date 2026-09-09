@@ -74,7 +74,24 @@ class SecuritySettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Security & Privacy')),
+      appBar: AppBar(
+        title: const Text('Security & Privacy'),
+        leading: SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            tooltip: 'Back',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/account');
+              }
+            },
+          ),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [

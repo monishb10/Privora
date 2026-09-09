@@ -22,7 +22,9 @@ class MovePhotoSheet extends ConsumerWidget {
   }) {
     return showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
+      barrierColor: Colors.black54,
       backgroundColor: AppColors.surface,
       builder: (context) => MovePhotoSheet(
         currentCategoryId: currentCategoryId,
@@ -51,17 +53,36 @@ class MovePhotoSheet extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            photoIds.length == 1
-                ? 'Move Photo'
-                : 'Move ${photoIds.length} Photos',
-            style: AppTypography.titleLarge,
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Select the destination category.',
-            style: AppTypography.bodySmall,
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    photoIds.length == 1
+                        ? 'Move Photo'
+                        : 'Move ${photoIds.length} Photos',
+                    style: AppTypography.titleLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Select the destination category.',
+                    style: AppTypography.bodySmall,
+                  ),
+                ],
+              ),
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(false),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           categoriesAsync.when(

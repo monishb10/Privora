@@ -176,23 +176,36 @@ class _MainScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      body: navigationShell,
-      bottomNavigationBar: PrivoraFloatingNavBar(
-        currentIndex: navigationShell.currentIndex,
-        onTap: (index) {
-          if (index == 1) {
-            // Central camera action: opens camera directly
-            Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute(
-                builder: (context) => const PrivateCameraScreen(),
-              ),
-            );
-          } else {
-            navigationShell.goBranch(index);
-          }
-        },
+    final isCategoriesTab = navigationShell.currentIndex == 0;
+
+    return PopScope(
+      canPop: isCategoriesTab,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        // When on a non-Categories root tab (Camera-tab, Trash, Account),
+        // system Back switches the active tab back to Categories.
+        if (navigationShell.currentIndex != 0) {
+          navigationShell.goBranch(0);
+        }
+      },
+      child: Scaffold(
+        extendBody: true,
+        body: navigationShell,
+        bottomNavigationBar: PrivoraFloatingNavBar(
+          currentIndex: navigationShell.currentIndex,
+          onTap: (index) {
+            if (index == 1) {
+              // Central camera action: opens camera directly
+              Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute(
+                  builder: (context) => const PrivateCameraScreen(),
+                ),
+              );
+            } else {
+              navigationShell.goBranch(index);
+            }
+          },
+        ),
       ),
     );
   }

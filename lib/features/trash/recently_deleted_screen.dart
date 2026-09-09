@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
@@ -137,6 +138,15 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
       backgroundColor: AppColors.mainBackground,
       appBar: AppBar(
         title: const Text('Recently Deleted'),
+        leading: SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            tooltip: 'Categories',
+            onPressed: () => context.go('/categories'),
+          ),
+        ),
         actions: [
           trashAsync.maybeWhen(
             data: (photos) => photos.isNotEmpty

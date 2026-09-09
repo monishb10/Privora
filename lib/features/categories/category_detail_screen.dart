@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -212,133 +213,163 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: _isSelectionMode
-            ? Text(
-                '${_selectedPhotoIds.length} Selected',
-                style: AppTypography.titleLarge,
-              )
-            : Text(widget.category.name, style: AppTypography.titleLarge),
-        leading: _isSelectionMode
-            ? IconButton(
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () => setState(() {
-                  _selectedPhotoIds.clear();
-                  _isSelectionMode = false;
-                }),
-              )
-            : const BackButton(),
-        actions: [
-          if (_isSelectionMode) ...[
-            IconButton(
-              icon: const Icon(Icons.drive_file_move_outlined),
-              tooltip: 'Move Selected',
-              onPressed: _selectedPhotoIds.isEmpty ? null : _moveSelected,
-            ),
-            IconButton(
-              icon: const Icon(
-                Icons.delete_outline_rounded,
-                color: AppColors.danger,
-              ),
-              tooltip: 'Delete Selected',
-              onPressed: _selectedPhotoIds.isEmpty ? null : _deleteSelected,
-            ),
-          ] else ...[
-            IconButton(
-              icon: Icon(
-                _ascending
-                    ? Icons.arrow_upward_rounded
-                    : Icons.arrow_downward_rounded,
-              ),
-              tooltip: _ascending
-                  ? 'Showing Oldest First'
-                  : 'Showing Newest First',
-              onPressed: () => setState(() => _ascending = !_ascending),
-            ),
-          ],
-        ],
-      ),
-      body: FutureBuilder<List<VaultPhoto>>(
-        future: _fetchPhotos(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.primaryAccent,
-                ),
-              ),
-            );
-          }
-
-          if (snapshot.hasError) {
-            return ErrorView(
-              message: snapshot.error.toString(),
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final photos = snapshot.data ?? [];
-
-          if (photos.isEmpty) {
-            return EmptyState(
-              icon: Icons.photo_camera_back_outlined,
-              title: 'No photos in this category yet',
-              subtitle:
-                  'Take a private photo or import photos from your device gallery.',
-              actionText: 'Add Photo',
-              onAction: _showAddPhotoOptions,
-            );
-          }
-
-          return Column(
-            children: [
-              if (_isSelectionMode)
-                Container(
-                  color: AppColors.elevatedSurface,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+    return PopScope(
+      canPop: !_isSelectionMode,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_isSelectionMode) {
+          setState(() {
+            _selectedPhotoIds.clear();
+            _isSelectionMode = false;
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: _isSelectionMode
+              ? Text(
+                  '${_selectedPhotoIds.length} Selected',
+                  style: AppTypography.titleLarge,
+                )
+              : Text(widget.category.name, style: AppTypography.titleLarge),
+          leading: SizedBox(
+            width: 48,
+            height: 48,
+            child: _isSelectionMode
+                ? IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Close Selection',
+                    onPressed: () => setState(() {
+                      _selectedPhotoIds.clear();
+                      _isSelectionMode = false;
+                    }),
+                  )
+                : IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      size: 20,
+                    ),
+                    tooltip: 'Back',
+                    onPressed: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        context.go('/categories');
+                      }
+                    },
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () => _selectAll(photos),
-                        child: Text(
-                          _selectedPhotoIds.length == photos.length
-                              ? 'Deselect All'
-                              : 'Select All',
-                        ),
-                      ),
-                      Text(
-                        '${_selectedPhotoIds.length} of ${photos.length}',
-                        style: AppTypography.labelSmall,
-                      ),
-                    ],
-                  ),
+          ),
+          actions: [
+            if (_isSelectionMode) ...[
+              IconButton(
+                icon: const Icon(Icons.drive_file_move_outlined),
+                tooltip: 'Move Selected',
+                onPressed: _selectedPhotoIds.isEmpty ? null : _moveSelected,
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.danger,
                 ),
-              Expanded(
-                child: PhotoGrid(
-                  photos: photos,
-                  categoryId: widget.category.id,
-                  isSelectionMode: _isSelectionMode,
-                  selectedPhotoIds: _selectedPhotoIds,
-                  onToggleSelect: _toggleSelect,
-                  onPhotoDeletedOrMoved: () => setState(() {}),
+                tooltip: 'Delete Selected',
+                onPressed: _selectedPhotoIds.isEmpty ? null : _deleteSelected,
+              ),
+            ] else ...[
+              IconButton(
+                icon: Icon(
+                  _ascending
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
                 ),
+                tooltip: _ascending
+                    ? 'Showing Oldest First'
+                    : 'Showing Newest First',
+                onPressed: () => setState(() => _ascending = !_ascending),
               ),
             ],
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primaryActionBlue,
-        foregroundColor: Colors.white,
-        onPressed: _showAddPhotoOptions,
-        child: const Icon(Icons.add_rounded, size: 28),
+          ],
+        ),
+        body: FutureBuilder<List<VaultPhoto>>(
+          future: _fetchPhotos(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryAccent,
+                  ),
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return ErrorView(
+                message: snapshot.error.toString(),
+                onRetry: () => setState(() {}),
+              );
+            }
+
+            final photos = snapshot.data ?? [];
+
+            if (photos.isEmpty) {
+              return EmptyState(
+                icon: Icons.photo_camera_back_outlined,
+                title: 'No photos in this category yet',
+                subtitle:
+                    'Take a private photo or import photos from your device gallery.',
+                actionText: 'Add Photo',
+                onAction: _showAddPhotoOptions,
+              );
+            }
+
+            return Column(
+              children: [
+                if (_isSelectionMode)
+                  Container(
+                    color: AppColors.elevatedSurface,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: () => _selectAll(photos),
+                          child: Text(
+                            _selectedPhotoIds.length == photos.length
+                                ? 'Deselect All'
+                                : 'Select All',
+                          ),
+                        ),
+                        Text(
+                          '${_selectedPhotoIds.length} of ${photos.length}',
+                          style: AppTypography.labelSmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                Expanded(
+                  child: PhotoGrid(
+                    photos: photos,
+                    categoryId: widget.category.id,
+                    isSelectionMode: _isSelectionMode,
+                    selectedPhotoIds: _selectedPhotoIds,
+                    onToggleSelect: _toggleSelect,
+                    onPhotoDeletedOrMoved: () => setState(() {}),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: AppColors.primaryActionBlue,
+          foregroundColor: Colors.white,
+          onPressed: _showAddPhotoOptions,
+          child: const Icon(Icons.add_rounded, size: 28),
+        ),
       ),
     );
   }

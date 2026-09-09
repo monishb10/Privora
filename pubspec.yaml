@@ -106,6 +106,9 @@ flutter:
     - assets/fonts/
 
   fonts:
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope-VariableFont_wght.ttf
     - family: PlayfairDisplay
       fonts:
         - asset: assets/fonts/PlayfairDisplay.ttf

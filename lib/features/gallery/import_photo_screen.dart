@@ -166,262 +166,292 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.mainBackground,
-      appBar: AppBar(
-        title: Text('Import to ${widget.categoryName}'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: _isUploading ? null : () => Navigator.of(context).pop(),
+    return PopScope(
+      canPop: !_isUploading,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_isUploading) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Upload in progress. Please wait for completion.'),
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.mainBackground,
+        appBar: AppBar(
+          title: Text('Import to ${widget.categoryName}'),
+          leading: SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              tooltip: 'Back',
+              onPressed: _isUploading
+                  ? null
+                  : () => Navigator.of(context).pop(),
+            ),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // No files selected view
-              if (_selectedFiles.isEmpty) ...[
-                const Spacer(flex: 1),
-                Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppColors.softBlueSurface,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.borderDivider),
-                    ),
-                    child: const Icon(
-                      Icons.photo_library_outlined,
-                      size: 38,
-                      color: AppColors.primaryActionBlue,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Center(
-                  child: Text(
-                    'Select Photos from Gallery',
-                    style: AppTypography.titleLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      'Photos will be encrypted with client-side AES-256-GCM before uploading to your private cloud.',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.secondaryTextColor,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // No files selected view
+                if (_selectedFiles.isEmpty) ...[
+                  const Spacer(flex: 1),
+                  Center(
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: AppColors.softBlueSurface,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.borderDivider),
                       ),
+                      child: const Icon(
+                        Icons.photo_library_outlined,
+                        size: 38,
+                        color: AppColors.primaryActionBlue,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Center(
+                    child: Text(
+                      'Select Photos from Gallery',
+                      style: AppTypography.titleLarge,
                       textAlign: TextAlign.center,
                     ),
                   ),
-                ),
-                const Spacer(flex: 2),
-                PrivoraButton(
-                  text: 'Open Gallery',
-                  leadingIcon: Icons.photo_library_rounded,
-                  onPressed: _pickGalleryPhotos,
-                ),
-                const SizedBox(height: 20),
-              ] else ...[
-                // Header with photo count
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${_selectedFiles.length} ${_selectedFiles.length == 1 ? 'photo' : 'photos'} selected',
-                      style: AppTypography.titleMedium,
-                    ),
-                    if (!_isUploading && !_isComplete)
-                      TextButton(
-                        onPressed: _pickGalleryPhotos,
-                        child: const Text('Change'),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Selected photos preview grid
-                Expanded(
-                  child: GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'Photos will be encrypted with client-side AES-256-GCM before uploading to your private cloud.',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.secondaryTextColor,
                         ),
-                    itemCount: _selectedFiles.length,
-                    itemBuilder: (context, index) {
-                      final file = _selectedFiles[index];
-                      final isFailed = _failedFiles.contains(file);
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  const Spacer(flex: 2),
+                  PrivoraButton(
+                    text: 'Open Gallery',
+                    leadingIcon: Icons.photo_library_rounded,
+                    onPressed: _pickGalleryPhotos,
+                  ),
+                  const SizedBox(height: 20),
+                ] else ...[
+                  // Header with photo count
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${_selectedFiles.length} ${_selectedFiles.length == 1 ? 'photo' : 'photos'} selected',
+                        style: AppTypography.titleMedium,
+                      ),
+                      if (!_isUploading && !_isComplete)
+                        TextButton(
+                          onPressed: _pickGalleryPhotos,
+                          child: const Text('Change'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
 
-                      return Stack(
-                        fit: StackFit.expand,
+                  // Selected photos preview grid
+                  Expanded(
+                    child: GridView.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
+                      itemCount: _selectedFiles.length,
+                      itemBuilder: (context, index) {
+                        final file = _selectedFiles[index];
+                        final isFailed = _failedFiles.contains(file);
+
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                File(file.path),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            if (isFailed)
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.error_outline_rounded,
+                                    color: AppColors.errorDestructive,
+                                    size: 28,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Error Message
+                  if (_errorMessage != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(
+                          color: AppColors.errorDestructive,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // Progress Bar and Exact Requirement Format: "Uploading 3 of 8"
+                  if (_isUploading) ...[
+                    LinearProgressIndicator(
+                      value: _totalBatchCount > 0
+                          ? _currentUploadIndex / _totalBatchCount
+                          : 0.0,
+                      color: AppColors.primaryActionBlue,
+                      backgroundColor: AppColors.softBlueSurface,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Uploading $_currentUploadIndex of $_totalBatchCount',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.primaryActionBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (_uploadState.statusMessage.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _uploadState.statusMessage,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.secondaryTextColor,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Completion status summary
+                  if (_isComplete) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _failedFiles.isEmpty
+                            ? AppColors.primaryActionBlue.withValues(
+                                alpha: 0.08,
+                              )
+                            : AppColors.errorDestructive.withValues(
+                                alpha: 0.08,
+                              ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _failedFiles.isEmpty
+                              ? AppColors.primaryActionBlue.withValues(
+                                  alpha: 0.3,
+                                )
+                              : AppColors.errorDestructive.withValues(
+                                  alpha: 0.3,
+                                ),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.file(
-                              File(file.path),
-                              fit: BoxFit.cover,
+                          Text(
+                            '$_successCount ${_successCount == 1 ? 'photo' : 'photos'} uploaded',
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: AppColors.primaryText,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          if (isFailed)
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.error_outline_rounded,
+                          if (_failedFiles.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '${_failedFiles.length} ${_failedFiles.length == 1 ? 'photo' : 'photos'} failed',
+                                style: AppTypography.bodySmall.copyWith(
                                   color: AppColors.errorDestructive,
-                                  size: 28,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                         ],
-                      );
-                    },
-                  ),
-                ),
-
-                // Error Message
-                if (_errorMessage != null) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: AppColors.errorDestructive),
-                    ),
-                  ),
-                ],
-
-                // Progress Bar and Exact Requirement Format: "Uploading 3 of 8"
-                if (_isUploading) ...[
-                  LinearProgressIndicator(
-                    value: _totalBatchCount > 0
-                        ? _currentUploadIndex / _totalBatchCount
-                        : 0.0,
-                    color: AppColors.primaryActionBlue,
-                    backgroundColor: AppColors.softBlueSurface,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Uploading $_currentUploadIndex of $_totalBatchCount',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.primaryActionBlue,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (_uploadState.statusMessage.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      _uploadState.statusMessage,
-                      style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.secondaryTextColor,
                       ),
                     ),
+                    const SizedBox(height: 16),
                   ],
-                  const SizedBox(height: 16),
-                ],
 
-                // Completion status summary
-                if (_isComplete) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: _failedFiles.isEmpty
-                          ? AppColors.primaryActionBlue.withValues(alpha: 0.08)
-                          : AppColors.errorDestructive.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _failedFiles.isEmpty
-                            ? AppColors.primaryActionBlue.withValues(alpha: 0.3)
-                            : AppColors.errorDestructive.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // Action Buttons
+                  if (!_isUploading && !_isComplete) ...[
+                    Row(
                       children: [
-                        Text(
-                          '$_successCount ${_successCount == 1 ? 'photo' : 'photos'} uploaded',
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.primaryText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (_failedFiles.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '${_failedFiles.length} ${_failedFiles.length == 1 ? 'photo' : 'photos'} failed',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.errorDestructive,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Action Buttons
-                if (!_isUploading && !_isComplete) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: PrivoraButton(
-                          text: 'Cancel',
-                          variant: PrivoraButtonVariant.secondary,
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: PrivoraButton(
-                          text: 'Encrypt & Upload',
-                          variant: PrivoraButtonVariant.primary,
-                          onPressed: () => _startImport(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ] else if (_isComplete) ...[
-                  Row(
-                    children: [
-                      if (_failedFiles.isNotEmpty) ...[
                         Expanded(
                           child: PrivoraButton(
-                            text: 'Retry Failed (${_failedFiles.length})',
+                            text: 'Cancel',
                             variant: PrivoraButtonVariant.secondary,
-                            onPressed: () =>
-                                _startImport(retryOnlyFailed: true),
+                            onPressed: () => Navigator.of(context).pop(),
                           ),
                         ),
                         const SizedBox(width: 12),
-                      ],
-                      Expanded(
-                        child: PrivoraButton(
-                          text: 'Done',
-                          variant: PrivoraButtonVariant.primary,
-                          onPressed: () => Navigator.of(context).pop(true),
+                        Expanded(
+                          child: PrivoraButton(
+                            text: 'Encrypt & Upload',
+                            variant: PrivoraButtonVariant.primary,
+                            onPressed: () => _startImport(),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ] else if (_isComplete) ...[
+                    Row(
+                      children: [
+                        if (_failedFiles.isNotEmpty) ...[
+                          Expanded(
+                            child: PrivoraButton(
+                              text: 'Retry Failed (${_failedFiles.length})',
+                              variant: PrivoraButtonVariant.secondary,
+                              onPressed: () =>
+                                  _startImport(retryOnlyFailed: true),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: PrivoraButton(
+                            text: 'Done',
+                            variant: PrivoraButtonVariant.primary,
+                            onPressed: () => Navigator.of(context).pop(true),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ],
               ],
-            ],
+            ),
           ),
         ),
       ),

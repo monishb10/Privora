@@ -133,73 +133,116 @@ class _ChangePinScreenState extends ConsumerState<ChangePinScreen> {
     }
   }
 
+  void _handleBack() {
+    if (_isLoading) return;
+    switch (_step) {
+      case ChangePinStep.confirmNew:
+        setState(() {
+          _step = ChangePinStep.enterNew;
+          _activeDigits = '';
+          _errorMessage = null;
+          _hasError = false;
+        });
+        break;
+      case ChangePinStep.enterNew:
+        setState(() {
+          _step = ChangePinStep.enterCurrent;
+          _activeDigits = '';
+          _errorMessage = null;
+          _hasError = false;
+        });
+        break;
+      case ChangePinStep.enterCurrent:
+        Navigator.of(context).pop();
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Change PIN')),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(
-                  child: Column(
-                    children: [
-                      const Spacer(flex: 1),
-                      const PrivoraLogo(size: 68),
-                      const SizedBox(height: 24),
-                      Text(
-                        _title,
-                        style: AppTypography.displayMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: Text(
-                          _subtitle,
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: _hasError
-                                ? AppColors.danger
-                                : AppColors.secondaryText,
-                          ),
+    return PopScope(
+      canPop: _step == ChangePinStep.enterCurrent && !_isLoading,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Change PIN'),
+          leading: SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              tooltip: 'Back',
+              onPressed: _isLoading ? null : _handleBack,
+            ),
+          ),
+        ),
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        const Spacer(flex: 1),
+                        const PrivoraLogo(size: 68),
+                        const SizedBox(height: 24),
+                        Text(
+                          _title,
+                          style: AppTypography.displayMedium,
                           textAlign: TextAlign.center,
                         ),
-                      ),
-                      const SizedBox(height: 36),
-                      if (_isLoading) ...[
-                        const SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              AppColors.primaryAccent,
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
+                          child: Text(
+                            _subtitle,
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: _hasError
+                                  ? AppColors.danger
+                                  : AppColors.secondaryText,
                             ),
+                            textAlign: TextAlign.center,
                           ),
                         ),
-                      ] else ...[
-                        PinDots(
-                          length: _activeDigits.length,
-                          hasError: _hasError,
+                        const SizedBox(height: 36),
+                        if (_isLoading) ...[
+                          const SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.primaryAccent,
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          PinDots(
+                            length: _activeDigits.length,
+                            hasError: _hasError,
+                          ),
+                        ],
+                        const Spacer(flex: 2),
+                        PinKeypad(
+                          enabled: !_isLoading,
+                          onDigitPressed: _onDigitPressed,
+                          onDeletePressed: _onDeletePressed,
                         ),
+                        const SizedBox(height: 24),
                       ],
-                      const Spacer(flex: 2),
-                      PinKeypad(
-                        enabled: !_isLoading,
-                        onDigitPressed: _onDigitPressed,
-                        onDeletePressed: _onDeletePressed,
-                      ),
-                      const SizedBox(height: 24),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

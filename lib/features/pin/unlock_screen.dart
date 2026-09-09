@@ -146,12 +146,37 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
     }
   }
 
+  Future<void> _handleBackToLogin() async {
+    final confirmed = await ConfirmationDialog.show(
+      context: context,
+      title: 'Sign Out?',
+      message:
+          'Are you sure you want to return to Google Login? You will need to sign in again to access your private vault.',
+      confirmText: 'Sign Out',
+      icon: Icons.logout_rounded,
+    );
+    if (confirmed == true && mounted) {
+      await ref.read(authRepositoryProvider).signOut();
+      ref.invalidate(currentUserProvider);
+      ref.invalidate(categoriesProvider);
+      ref.invalidate(recentlyDeletedPhotosProvider);
+      ref.invalidate(storageUsageProvider);
+      if (mounted) {
+        context.go('/login');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLockedOut = _lockoutSecondsRemaining > 0;
 
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _handleBackToLogin();
+      },
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: SafeArea(
@@ -175,42 +200,21 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                             children: [
                               TextButton.icon(
                                 icon: const Icon(
-                                  Icons.logout_rounded,
-                                  size: 18,
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 16,
                                 ),
-                                label: const Text('Sign Out'),
+                                label: const Text('Back to Login'),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.secondaryText,
+                                  foregroundColor: AppColors.secondaryTextColor,
+                                  minimumSize: const Size(48, 48),
                                 ),
-                                onPressed: () async {
-                                  final confirmed = await ConfirmationDialog.show(
-                                    context: context,
-                                    title: 'Sign Out?',
-                                    message:
-                                        'Are you sure you want to sign out? You will need your Google account and 6-digit PIN to sign back in.',
-                                    confirmText: 'Sign Out',
-                                    icon: Icons.logout_rounded,
-                                  );
-                                  if (confirmed == true && context.mounted) {
-                                    await ref
-                                        .read(authRepositoryProvider)
-                                        .signOut();
-                                    ref.invalidate(currentUserProvider);
-                                    ref.invalidate(categoriesProvider);
-                                    ref.invalidate(
-                                      recentlyDeletedPhotosProvider,
-                                    );
-                                    ref.invalidate(storageUsageProvider);
-                                    if (context.mounted) {
-                                      context.go('/login');
-                                    }
-                                  }
-                                },
+                                onPressed: _handleBackToLogin,
                               ),
                               TextButton(
                                 onPressed: () => context.push('/recover-vault'),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.secondaryText,
+                                  foregroundColor: AppColors.secondaryTextColor,
+                                  minimumSize: const Size(48, 48),
                                 ),
                                 child: const Text('Forgot PIN?'),
                               ),

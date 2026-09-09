@@ -6,6 +6,7 @@ import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/validators.dart';
+import '../../core/widgets/confirmation_dialog.dart';
 import '../../core/widgets/privora_button.dart';
 
 /// Modal bottom sheet for creating a new custom photo category.
@@ -106,172 +107,204 @@ class _CreateCategorySheetState extends ConsumerState<CreateCategorySheet> {
     }
   }
 
+  bool get _isDirty => _nameController.text.trim().isNotEmpty;
+
+  Future<void> _handleCancel() async {
+    if (_isLoading) return;
+    if (_isDirty) {
+      final confirmed = await ConfirmationDialog.show(
+        context: context,
+        title: 'Discard Category?',
+        message:
+            'You have unsaved changes. Are you sure you want to discard this new category?',
+        confirmText: 'Discard',
+        cancelText: 'Keep Editing',
+        isDestructive: true,
+      );
+      if (confirmed == true && mounted) {
+        Navigator.of(context).pop(false);
+      }
+    } else {
+      Navigator.of(context).pop(false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.cardSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 14,
-            bottom: 24 + bottomInset,
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.borderDivider,
-                      borderRadius: BorderRadius.circular(2),
+    return PopScope(
+      canPop: !_isDirty && !_isLoading,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _handleCancel();
+      },
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.cardSurface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 14,
+              bottom: 24 + bottomInset,
+            ),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.borderDivider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                const Text('New Category', style: AppTypography.sectionTitle),
-                const SizedBox(height: 4),
-                Text(
-                  'Create a private collection to organize your encrypted moments.',
-                  style: AppTypography.bodySmall,
-                ),
-                const SizedBox(height: 20),
+                  const SizedBox(height: 18),
+                  const Text('New Category', style: AppTypography.sectionTitle),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Create a private collection to organize your encrypted moments.',
+                    style: AppTypography.bodySmall,
+                  ),
+                  const SizedBox(height: 20),
 
-                if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.errorDestructive.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
+                  if (_errorMessage != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
                         color: AppColors.errorDestructive.withValues(
-                          alpha: 0.3,
+                          alpha: 0.08,
                         ),
-                      ),
-                    ),
-                    child: Text(
-                      _errorMessage!,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.errorDestructive,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                TextFormField(
-                  controller: _nameController,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.words,
-                  style: AppTypography.bodyLarge,
-                  decoration: const InputDecoration(
-                    labelText: 'Category Name',
-                    hintText: 'e.g. Personal, Trips, Documents',
-                    prefixIcon: Icon(
-                      Icons.folder_outlined,
-                      color: AppColors.secondaryTextColor,
-                    ),
-                  ),
-                  validator: Validators.validateCategoryName,
-                ),
-                const SizedBox(height: 22),
-
-                const Text('Category Color', style: AppTypography.labelMedium),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 48,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: AppColors.categoryPalette.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: 10),
-                    itemBuilder: (context, index) {
-                      final color = AppColors.categoryPalette[index];
-                      final isSelected =
-                          color.toARGB32() == _selectedColor.toARGB32();
-
-                      return Semantics(
-                        button: true,
-                        selected: isSelected,
-                        label: 'Color swatch ${index + 1}',
-                        child: GestureDetector(
-                          onTap: () => setState(() => _selectedColor = color),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.primaryText
-                                    : AppColors.borderDivider,
-                                width: isSelected ? 2.5 : 1.0,
-                              ),
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: color.withValues(alpha: 0.45),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: isSelected
-                                ? const Center(
-                                    child: Icon(
-                                      Icons.check_rounded,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                  )
-                                : null,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.errorDestructive.withValues(
+                            alpha: 0.3,
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: PrivoraButton(
-                        text: 'Cancel',
-                        variant: PrivoraButtonVariant.secondary,
-                        onPressed: _isLoading
-                            ? null
-                            : () => Navigator.of(context).pop(false),
+                      ),
+                      child: Text(
+                        _errorMessage!,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.errorDestructive,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: PrivoraButton(
-                        text: 'Create Category',
-                        variant: PrivoraButtonVariant.primary,
-                        isLoading: _isLoading,
-                        onPressed: _isLoading ? null : _handleCreate,
-                      ),
-                    ),
+                    const SizedBox(height: 16),
                   ],
-                ),
-              ],
+
+                  TextFormField(
+                    controller: _nameController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    style: AppTypography.bodyLarge,
+                    decoration: const InputDecoration(
+                      labelText: 'Category Name',
+                      hintText: 'e.g. Personal, Trips, Documents',
+                      prefixIcon: Icon(
+                        Icons.folder_outlined,
+                        color: AppColors.secondaryTextColor,
+                      ),
+                    ),
+                    validator: Validators.validateCategoryName,
+                  ),
+                  const SizedBox(height: 22),
+
+                  const Text(
+                    'Category Color',
+                    style: AppTypography.labelMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 48,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: AppColors.categoryPalette.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final color = AppColors.categoryPalette[index];
+                        final isSelected =
+                            color.toARGB32() == _selectedColor.toARGB32();
+
+                        return Semantics(
+                          button: true,
+                          selected: isSelected,
+                          label: 'Color swatch ${index + 1}',
+                          child: GestureDetector(
+                            onTap: () => setState(() => _selectedColor = color),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.primaryText
+                                      : AppColors.borderDivider,
+                                  width: isSelected ? 2.5 : 1.0,
+                                ),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: color.withValues(alpha: 0.45),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: isSelected
+                                  ? const Center(
+                                      child: Icon(
+                                        Icons.check_rounded,
+                                        color: Colors.white,
+                                        size: 22,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: PrivoraButton(
+                          text: 'Cancel',
+                          variant: PrivoraButtonVariant.secondary,
+                          onPressed: _isLoading ? null : _handleCancel,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: PrivoraButton(
+                          text: 'Create Category',
+                          variant: PrivoraButtonVariant.primary,
+                          isLoading: _isLoading,
+                          onPressed: _isLoading ? null : _handleCreate,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -21,10 +21,10 @@ class AppTypography {
   static const String fontFamily = fontBody;
 
   // =========================================================================
-  // Brand Header System (Playfair Display)
+  // Brand Header System (Playfair Display - Preserved Wordmark)
   // =========================================================================
 
-  /// Privora Wordmark (App Title) - 27 px Bold
+  /// Privora Wordmark (App Title in Brand Bar) - 27 px Bold Playfair Display
   static const TextStyle brandTitle = TextStyle(
     fontFamily: fontHeading,
     fontSize: 27,
@@ -34,19 +34,36 @@ class AppTypography {
     height: 1.2,
   );
 
-  /// Display Large (Hero / Splash) - 28 px Bold
-  static const TextStyle displayLarge = TextStyle(
-    fontFamily: fontHeading,
+  // =========================================================================
+  // UI Sans-Serif System (Manrope - Professional Hierarchy)
+  // =========================================================================
+
+  /// Main screen heading - 28 px SemiBold (Weight 600)
+  static const TextStyle mainHeading = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
     fontSize: 28,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.4,
     color: AppColors.primaryText,
-    height: 1.2,
+    height: 1.25,
   );
 
-  /// Display Medium (Auth / PIN Headers) - 26 px SemiBold
+  /// Display Large (Hero / Screen Heading) - 28 px SemiBold (Weight 600)
+  static const TextStyle displayLarge = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 28,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.4,
+    color: AppColors.primaryText,
+    height: 1.25,
+  );
+
+  /// Display Medium (Auth / PIN Headers) - 26 px SemiBold (Weight 600)
   static const TextStyle displayMedium = TextStyle(
-    fontFamily: fontHeading,
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
     fontSize: 26,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.3,
@@ -54,22 +71,29 @@ class AppTypography {
     height: 1.25,
   );
 
-  // =========================================================================
-  // UI Sans-Serif System (Manrope / Inter / System Fallback)
-  // =========================================================================
-
-  /// Screen Title (e.g. Page Headers) - 27 px Bold
+  /// Screen Title (Page Headers) - 27 px SemiBold (Weight 600)
   static const TextStyle screenTitle = TextStyle(
     fontFamily: fontBody,
     fontFamilyFallback: fontFallbacks,
     fontSize: 27,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.4,
     color: AppColors.primaryText,
     height: 1.25,
   );
 
-  /// Section Title (Categories section, sheet headers) - 20 px SemiBold
+  /// AppBar/page title - 20 px SemiBold (Weight 600)
+  static const TextStyle appBarTitle = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.2,
+    color: AppColors.primaryText,
+    height: 1.25,
+  );
+
+  /// Section Title (Categories section, sheet headers) - 20 px SemiBold (Weight 600)
   static const TextStyle sectionTitle = TextStyle(
     fontFamily: fontBody,
     fontFamilyFallback: fontFallbacks,
@@ -80,7 +104,7 @@ class AppTypography {
     height: 1.3,
   );
 
-  /// Title Large - 20 px SemiBold (alias)
+  /// Title Large - 20 px SemiBold (Weight 600)
   static const TextStyle titleLarge = TextStyle(
     fontFamily: fontBody,
     fontFamilyFallback: fontFallbacks,
@@ -91,18 +115,29 @@ class AppTypography {
     height: 1.3,
   );
 
-  /// Title Medium (Card titles, dialog headings) - 17 px SemiBold
-  static const TextStyle titleMedium = TextStyle(
+  /// Card title / Title Medium - 18 px SemiBold (Weight 600)
+  static const TextStyle cardTitle = TextStyle(
     fontFamily: fontBody,
     fontFamilyFallback: fontFallbacks,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.1,
     color: AppColors.primaryText,
     height: 1.35,
   );
 
-  /// Title Small (Subtitles) - 15 px Medium
+  /// Title Medium (Card titles, dialog headings) - 18 px SemiBold (Weight 600)
+  static const TextStyle titleMedium = TextStyle(
+    fontFamily: fontBody,
+    fontFamilyFallback: fontFallbacks,
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.1,
+    color: AppColors.primaryText,
+    height: 1.35,
+  );
+
+  /// Title Small (Subtitles) - 15 px Medium (Weight 500)
   static const TextStyle titleSmall = TextStyle(
     fontFamily: fontBody,
     fontFamilyFallback: fontFallbacks,
@@ -241,4 +276,24 @@ class AppTypography {
     fontWeight: FontWeight.w700,
     color: AppColors.primaryText,
   );
+
+  /// Generates the complete Material 3 TextTheme adhering to Privora's Manrope hierarchy
+  static TextTheme buildTextTheme() {
+    return const TextTheme(
+      displayLarge: displayLarge,
+      displayMedium: displayMedium,
+      headlineLarge: mainHeading,
+      headlineMedium: screenTitle,
+      headlineSmall: sectionTitle,
+      titleLarge: appBarTitle,
+      titleMedium: cardTitle,
+      titleSmall: titleSmall,
+      bodyLarge: bodyLarge,
+      bodyMedium: bodyMedium,
+      bodySmall: bodySmall,
+      labelLarge: buttonText,
+      labelMedium: labelMedium,
+      labelSmall: labelSmall,
+    );
+  }
 }

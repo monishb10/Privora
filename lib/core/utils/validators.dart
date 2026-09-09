@@ -34,11 +34,15 @@ class Validators {
     return null;
   }
 
+  /// Checks if a string is strictly a six-digit numeric PIN
+  static bool isSixDigitPin(String value) =>
+      RegExp(r'^[0-9]{6}$').hasMatch(value);
+
   static String? validatePin(String? value) {
     if (value == null || value.isEmpty) {
       return 'PIN is required.';
     }
-    if (value.length != 6 || !RegExp(r'^[0-9]{6}$').hasMatch(value)) {
+    if (!isSixDigitPin(value)) {
       return 'PIN must be exactly 6 numeric digits.';
     }
     return null;

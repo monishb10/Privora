@@ -27,7 +27,9 @@ class PhotoDetailsSheet extends ConsumerWidget {
   }) {
     return showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
+      barrierColor: Colors.black54,
       backgroundColor: AppColors.surface,
       builder: (context) => PhotoDetailsSheet(
         photo: photo,
@@ -87,17 +89,35 @@ class PhotoDetailsSheet extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Photo Details', style: AppTypography.titleLarge),
-              IconButton(
-                icon: const Icon(
-                  Icons.edit_outlined,
-                  size: 20,
-                  color: AppColors.primaryAccent,
-                ),
-                tooltip: 'Rename Photo',
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  onRenameRequested();
-                },
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 20,
+                        color: AppColors.primaryAccent,
+                      ),
+                      tooltip: 'Rename Photo',
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        onRenameRequested();
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 22),
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -17,7 +18,24 @@ class StorageUsageScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Cloud Storage')),
+      appBar: AppBar(
+        title: const Text('Cloud Storage'),
+        leading: SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            tooltip: 'Back',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/account');
+              }
+            },
+          ),
+        ),
+      ),
       body: storageAsync.when(
         data: (totalBytes) {
           int totalPhotos = 0;

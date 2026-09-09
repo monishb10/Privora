@@ -137,7 +137,18 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.mainBackground,
-      appBar: AppBar(title: const Text('Account & Vault')),
+      appBar: AppBar(
+        title: const Text('Account & Vault'),
+        leading: SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            tooltip: 'Categories',
+            onPressed: () => context.go('/categories'),
+          ),
+        ),
+      ),
       body: _isDeleting
           ? const Center(
               child: Column(

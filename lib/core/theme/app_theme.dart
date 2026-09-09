@@ -40,6 +40,8 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.mainBackground,
       colorScheme: colorScheme,
       fontFamily: AppTypography.fontFamily,
+      textTheme: AppTypography.buildTextTheme(),
+      primaryTextTheme: AppTypography.buildTextTheme(),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.mainBackground,
         elevation: 0,
@@ -52,7 +54,7 @@ class AppTheme {
           systemNavigationBarColor: AppColors.mainBackground,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        titleTextStyle: AppTypography.brandTitle,
+        titleTextStyle: AppTypography.appBarTitle,
         iconTheme: IconThemeData(color: AppColors.primaryText),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(

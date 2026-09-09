@@ -279,13 +279,18 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                 ),
                 child: Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 20,
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        tooltip: 'Back',
+                        onPressed: () => Navigator.of(context).pop(),
                       ),
-                      onPressed: () => Navigator.of(context).pop(),
                     ),
                     const SizedBox(width: 8),
                     Expanded(

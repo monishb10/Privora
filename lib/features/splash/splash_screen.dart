@@ -43,71 +43,93 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
+  String? _errorMessage;
+  bool _isChecking = false;
+
   Future<void> _checkInitialRoute() async {
-    // 1. Startup disk hygiene: clean any leftover unencrypted files
-    await ref.read(temporaryFileCleanerProvider).cleanTemporaryFiles();
+    if (_isChecking) return;
+    setState(() {
+      _isChecking = true;
+      _errorMessage = null;
+    });
 
-    // Minimal tick for smooth frame initialization without artificial delay
-    await Future.delayed(const Duration(milliseconds: 100));
-    if (!mounted) return;
-
-    final authRepo = ref.read(authRepositoryProvider);
-    final vaultRepo = ref.read(vaultRepositoryProvider);
-    final isLocked = ref.read(sessionLockServiceProvider);
-    final user = authRepo.currentUser;
-
-    if (user == null) {
-      // Rule: No Supabase session -> Google Login
-      context.go('/login');
-      return;
-    }
-
-    // Clean expired trash for authenticated user
     try {
-      ref.read(photoRepositoryProvider).cleanExpiredTrash(user.id);
-    } catch (_) {}
+      // 1. Startup disk hygiene: clean any leftover unencrypted files
+      await ref.read(temporaryFileCleanerProvider).cleanTemporaryFiles();
 
-    // Verify vault setup from server record with guarded error handling
-    Map<String, dynamic>? serverVault;
-    bool lookupFailed = false;
-    try {
-      serverVault = await vaultRepo.getServerVaultData(user.id);
-    } catch (e) {
-      debugPrint('Splash vault lookup failed or offline: $e');
-      lookupFailed = true;
-    }
-    if (!mounted) return;
+      // Minimal tick for smooth frame initialization without artificial delay
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
 
-    final hasLocal = await vaultRepo.hasCompletedSetup(user.id);
-    if (!mounted) return;
+      final authRepo = ref.read(authRepositoryProvider);
+      final vaultRepo = ref.read(vaultRepositoryProvider);
+      final isLocked = ref.read(sessionLockServiceProvider);
+      final user = authRepo.currentUser;
 
-    if (lookupFailed) {
-      // Offline / network failure: allow unlock if local keys exist; never create replacement key
-      if (hasLocal) {
-        context.go('/unlock');
-      } else {
+      if (user == null) {
+        // Rule: No Supabase session -> Google Login
         context.go('/login');
+        return;
       }
-      return;
-    }
 
-    if (serverVault == null) {
-      // Confirmed: Authenticated user with no PIN/vault setup -> Create PIN
-      context.go('/create-pin');
-      return;
-    }
+      // Clean expired trash for authenticated user
+      try {
+        ref.read(photoRepositoryProvider).cleanExpiredTrash(user.id);
+      } catch (_) {}
 
-    if (!hasLocal) {
-      // Required local key material missing on this device -> Recovery flow
-      context.go('/recover-vault');
-      return;
-    }
+      // Verify vault setup from server record with bounded wait (10 seconds)
+      Map<String, dynamic>? serverVault;
+      bool lookupFailed = false;
+      try {
+        serverVault = await vaultRepo
+            .getServerVaultData(user.id)
+            .timeout(const Duration(seconds: 10));
+      } catch (e) {
+        debugPrint('Splash vault lookup failed or offline: $e');
+        lookupFailed = true;
+      }
+      if (!mounted) return;
 
-    // Rule: Authenticated and unlocked user -> Categories; otherwise Enter PIN
-    if (!isLocked && vaultRepo.hasActiveKey) {
-      context.go('/categories');
-    } else {
-      context.go('/unlock');
+      final hasLocal = await vaultRepo.hasCompletedSetup(user.id);
+      if (!mounted) return;
+
+      if (lookupFailed) {
+        // Offline / network failure: allow unlock if local keys exist; never create replacement key
+        if (hasLocal) {
+          context.go('/unlock');
+        } else {
+          setState(() {
+            _errorMessage =
+                'Unable to connect to your vault. Please check your connection and retry.';
+          });
+        }
+        return;
+      }
+
+      if (serverVault == null) {
+        // Confirmed: Authenticated user with no PIN/vault setup -> Create PIN
+        context.go('/create-pin');
+        return;
+      }
+
+      if (!hasLocal) {
+        // Required local key material missing on this device -> Recovery flow
+        context.go('/recover-vault');
+        return;
+      }
+
+      // Rule: Authenticated and unlocked user -> Categories; otherwise Enter PIN
+      if (!isLocked && vaultRepo.hasActiveKey) {
+        context.go('/categories');
+      } else {
+        context.go('/unlock');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isChecking = false;
+        });
+      }
     }
   }
 
@@ -136,16 +158,52 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
               ),
               const SizedBox(height: 40),
-              const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppColors.primaryActionBlue,
+              if (_errorMessage != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    _errorMessage!,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.errorDestructive,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: () => context.go('/login'),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        foregroundColor: AppColors.secondaryTextColor,
+                      ),
+                      child: const Text('Back to Login'),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: _checkInitialRoute,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryActionBlue,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(100, 48),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ] else
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primaryActionBlue,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

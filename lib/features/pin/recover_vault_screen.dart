@@ -86,7 +86,26 @@ class _RecoverVaultScreenState extends ConsumerState<RecoverVaultScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Recover Vault')),
+      appBar: AppBar(
+        title: const Text('Recover Vault'),
+        leading: SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            tooltip: 'Back',
+            onPressed: _isLoading
+                ? null
+                : () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/unlock');
+                    }
+                  },
+          ),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
