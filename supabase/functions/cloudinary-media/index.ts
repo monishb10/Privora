@@ -17,8 +17,8 @@ async function computeSha1(data: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Generate Cloudinary signature for upload or destroy
-// Required alphabetical sorting: public_id, timestamp, type
+// Generate Cloudinary signature for upload, download, or destroy
+// Alphabetical sorting of all signed parameters is strictly enforced
 async function signCloudinaryParams(
   params: Record<string, string | number>,
   apiSecret: string,
@@ -35,10 +35,11 @@ serve(async (req: Request) => {
   }
 
   try {
-    // 1. Verify Cloudinary configuration secrets
+    // 1. Verify Cloudinary and Supabase configuration secrets
     const cloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME");
     const apiKey = Deno.env.get("CLOUDINARY_API_KEY");
     const apiSecret = Deno.env.get("CLOUDINARY_API_SECRET");
+    const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET") || "privora_signed";
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -51,6 +52,13 @@ serve(async (req: Request) => {
       );
     }
 
+    // Parse request body
+    const body = await req.json().catch(() => ({}));
+    const { action } = body;
+
+    // Admin database client for ownership checks and database mutations
+    const dbClient = createClient(supabaseUrl, supabaseServiceKey);
+
     // 2. Validate Supabase JWT from Authorization Header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -62,28 +70,52 @@ serve(async (req: Request) => {
 
     const jwtToken = authHeader.replace("Bearer ", "").trim();
 
-    // Authenticated client using the caller's JWT to extract verified user
-    const userClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
+    // Check if this is a backend service-role call for scheduled cleanup
+    const isServiceRole = jwtToken === supabaseServiceKey;
 
-    const { data: userData, error: userError } = await userClient.auth.getUser(jwtToken);
-    if (userError || !userData?.user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid or expired session." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    let userId = "";
+    if (!isServiceRole) {
+      const userClient = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { persistSession: false },
+      });
+
+      const { data: userData, error: userError } = await userClient.auth.getUser(jwtToken);
+      if (userError || !userData?.user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized: Invalid or expired session." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      userId = userData.user.id;
     }
 
-    // User ID derived strictly from verified Supabase JWT
-    const userId = userData.user.id;
+    // Helper: Destroy asset on Cloudinary
+    const destroyAsset = async (pubId: string | null) => {
+      if (!pubId) return true;
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signature = await signCloudinaryParams(
+        {
+          public_id: pubId,
+          timestamp: timestamp,
+          type: "authenticated",
+        },
+        apiSecret,
+      );
 
-    // Admin database client for ownership checks and database mutations
-    const dbClient = createClient(supabaseUrl, supabaseServiceKey);
+      const formData = new FormData();
+      formData.append("public_id", pubId);
+      formData.append("timestamp", timestamp.toString());
+      formData.append("type", "authenticated");
+      formData.append("api_key", apiKey);
+      formData.append("signature", signature);
 
-    // Parse request body
-    const body = await req.json();
-    const { action } = body;
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/destroy`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json().catch(() => ({}));
+      return result.result === "ok" || result.result === "not found";
+    };
 
     // -------------------------------------------------------------------------
     // ACTION 1: createUploadSignature
@@ -125,23 +157,39 @@ serve(async (req: Request) => {
       const timestamp = Math.floor(Date.now() / 1000);
 
       // Sign parameters for full photo upload: public_id, timestamp, type=authenticated
-      const fullSignature = await signCloudinaryParams(
-        {
-          public_id: fullPublicId,
-          timestamp: timestamp,
-          type: "authenticated",
-        },
-        apiSecret,
-      );
+      const fullSignParams: Record<string, string | number> = {
+        public_id: fullPublicId,
+        timestamp: timestamp,
+        type: "authenticated",
+      };
+      if (uploadPreset) {
+        fullSignParams["upload_preset"] = uploadPreset;
+      }
+      const fullSignature = await signCloudinaryParams(fullSignParams, apiSecret);
 
       // Sign parameters for thumbnail upload
-      const thumbSignature = await signCloudinaryParams(
+      const thumbSignParams: Record<string, string | number> = {
+        public_id: thumbPublicId,
+        timestamp: timestamp,
+        type: "authenticated",
+      };
+      if (uploadPreset) {
+        thumbSignParams["upload_preset"] = uploadPreset;
+      }
+      const thumbSignature = await signCloudinaryParams(thumbSignParams, apiSecret);
+
+      // Track pending upload in server-controlled database table
+      await dbClient.from("pending_uploads").upsert(
         {
-          public_id: thumbPublicId,
-          timestamp: timestamp,
-          type: "authenticated",
+          user_id: userId,
+          category_id: categoryId,
+          photo_id: photoId,
+          full_public_id: fullPublicId,
+          thumbnail_public_id: thumbPublicId,
+          status: "pending",
+          updated_at: new Date().toISOString(),
         },
-        apiSecret,
+        { onConflict: "photo_id" },
       );
 
       return new Response(
@@ -149,6 +197,7 @@ serve(async (req: Request) => {
           cloudName,
           apiKey,
           timestamp,
+          uploadPreset: uploadPreset || null,
           resourceType: "raw",
           type: "authenticated",
           photoId,
@@ -166,7 +215,109 @@ serve(async (req: Request) => {
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 2: getDownloadUrl
+    // ACTION 2: commitUpload
+    // -------------------------------------------------------------------------
+    if (action === "commitUpload") {
+      const {
+        photoId,
+        categoryId,
+        displayName,
+        mimeType,
+        encryptedSize,
+        width,
+        height,
+        assetId,
+        version,
+      } = body;
+
+      if (!photoId || !categoryId) {
+        return new Response(
+          JSON.stringify({ error: "Missing photoId or categoryId." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Check if photo is already committed (Idempotent Commit)
+      const { data: existingPhoto } = await dbClient
+        .from("photos")
+        .select("*")
+        .eq("id", photoId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (existingPhoto) {
+        return new Response(
+          JSON.stringify({ success: true, photo: existingPhoto, alreadyCommitted: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Verify pending upload record exists and belongs to user
+      const { data: pending, error: pendError } = await dbClient
+        .from("pending_uploads")
+        .select("*")
+        .eq("photo_id", photoId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (pendError || !pending) {
+        return new Response(
+          JSON.stringify({ error: "Pending upload record not found or unowned." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const now = new Date().toISOString();
+      const insertData = {
+        id: photoId,
+        user_id: userId,
+        category_id: categoryId,
+        storage_path: pending.full_public_id,
+        thumbnail_path: pending.thumbnail_public_id,
+        display_name: displayName || "Encrypted Photo",
+        mimeType: mimeType || "image/jpeg",
+        encrypted_size: encryptedSize || 0,
+        width: width || null,
+        height: height || null,
+        storage_provider: "cloudinary",
+        cloudinary_public_id: pending.full_public_id,
+        cloudinary_thumbnail_public_id: pending.thumbnail_public_id,
+        cloudinary_asset_id: assetId || null,
+        cloudinary_version: version ? String(version) : null,
+        encrypted_bytes: encryptedSize || 0,
+        original_filename: displayName || null,
+        created_at: now,
+        updated_at: now,
+      };
+
+      const { data: inserted, error: insertError } = await dbClient
+        .from("photos")
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (insertError) {
+        return new Response(
+          JSON.stringify({ error: `Database commit failed: ${insertError.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Mark pending upload as committed
+      await dbClient
+        .from("pending_uploads")
+        .update({ status: "committed", updated_at: now })
+        .eq("photo_id", photoId)
+        .eq("user_id", userId);
+
+      return new Response(
+        JSON.stringify({ success: true, photo: inserted }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 3: getDownloadUrl
     // -------------------------------------------------------------------------
     if (action === "getDownloadUrl") {
       const { photoId, target } = body; // target: 'full' | 'thumbnail'
@@ -178,7 +329,7 @@ serve(async (req: Request) => {
         );
       }
 
-      // Verify photo exists and belongs to auth.uid()
+      // Verify photo exists and strictly belongs to auth.uid()
       const { data: photo, error: photoError } = await dbClient
         .from("photos")
         .select("id, cloudinary_public_id, cloudinary_thumbnail_public_id")
@@ -204,27 +355,29 @@ serve(async (req: Request) => {
         );
       }
 
-      // Generate signed delivery download URL
-      // Valid for 1 hour
-      const timestamp = Math.floor(Date.now() / 1000) + 3600;
-      const signature = await signCloudinaryParams(
-        {
-          public_id: publicId,
-          timestamp: timestamp,
-        },
-        apiSecret,
-      );
+      // Documented expiring download mechanism: private_download_url with expires_at
+      const now = Math.floor(Date.now() / 1000);
+      const expiresAt = now + 3600; // 1 hour expiration window
 
-      const downloadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/raw/download?api_key=${apiKey}&public_id=${encodeURIComponent(publicId)}&timestamp=${timestamp}&signature=${signature}`;
+      const signParams: Record<string, string | number> = {
+        expires_at: expiresAt,
+        public_id: publicId,
+        timestamp: now,
+        type: "authenticated",
+      };
+
+      const signature = await signCloudinaryParams(signParams, apiSecret);
+
+      const downloadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/raw/download?api_key=${apiKey}&expires_at=${expiresAt}&public_id=${encodeURIComponent(publicId)}&timestamp=${now}&type=authenticated&signature=${signature}`;
 
       return new Response(
-        JSON.stringify({ downloadUrl }),
+        JSON.stringify({ downloadUrl, expiresAt }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 3: permanentlyDelete
+    // ACTION 4: permanentlyDelete
     // -------------------------------------------------------------------------
     if (action === "permanentlyDelete") {
       const { photoId } = body;
@@ -236,10 +389,10 @@ serve(async (req: Request) => {
         );
       }
 
-      // Validate ownership in database
+      // Validate ownership in database and prevent race condition with restore
       const { data: photo, error: photoError } = await dbClient
         .from("photos")
-        .select("id, cloudinary_public_id, cloudinary_thumbnail_public_id")
+        .select("id, cloudinary_public_id, cloudinary_thumbnail_public_id, deleted_at")
         .eq("id", photoId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -251,36 +404,7 @@ serve(async (req: Request) => {
         );
       }
 
-      // Helper function to call Cloudinary Destroy API
-      const destroyAsset = async (pubId: string | null) => {
-        if (!pubId) return true;
-        const timestamp = Math.floor(Date.now() / 1000);
-        const signature = await signCloudinaryParams(
-          {
-            public_id: pubId,
-            timestamp: timestamp,
-            type: "authenticated",
-          },
-          apiSecret,
-        );
-
-        const formData = new FormData();
-        formData.append("public_id", pubId);
-        formData.append("timestamp", timestamp.toString());
-        formData.append("type", "authenticated");
-        formData.append("api_key", apiKey);
-        formData.append("signature", signature);
-
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/destroy`, {
-          method: "POST",
-          body: formData,
-        });
-        const result = await res.json();
-        // ok or not found is acceptable for idempotent deletion
-        return result.result === "ok" || result.result === "not found";
-      };
-
-      // 1. Delete full and thumbnail assets in Cloudinary
+      // 1. Destroy full and thumbnail assets on Cloudinary
       const fullOk = await destroyAsset(photo.cloudinary_public_id);
       const thumbOk = await destroyAsset(photo.cloudinary_thumbnail_public_id);
 
@@ -305,6 +429,13 @@ serve(async (req: Request) => {
         );
       }
 
+      // Clean pending uploads entry if present
+      await dbClient
+        .from("pending_uploads")
+        .delete()
+        .eq("photo_id", photoId)
+        .eq("user_id", userId);
+
       return new Response(
         JSON.stringify({ success: true }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -312,48 +443,106 @@ serve(async (req: Request) => {
     }
 
     // -------------------------------------------------------------------------
-    // ACTION 4: cleanupFailedUpload
+    // ACTION 5: cleanupFailedUpload
     // -------------------------------------------------------------------------
     if (action === "cleanupFailedUpload") {
-      const { fullPublicId, thumbnailPublicId } = body;
+      const { photoId, fullPublicId, thumbnailPublicId } = body;
 
-      const userPrefix = `privora/${userId}/`;
-
-      // Security check: Must strictly start with the authenticated user's prefix
       const assetsToDelete: string[] = [];
+
+      // Prefer server-tracked pending upload
+      if (photoId) {
+        const { data: pending } = await dbClient
+          .from("pending_uploads")
+          .select("full_public_id, thumbnail_public_id")
+          .eq("photo_id", photoId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (pending) {
+          if (pending.full_public_id) assetsToDelete.push(pending.full_public_id);
+          if (pending.thumbnail_public_id) assetsToDelete.push(pending.thumbnail_public_id);
+
+          await dbClient
+            .from("pending_uploads")
+            .update({ status: "abandoned", updated_at: new Date().toISOString() })
+            .eq("photo_id", photoId)
+            .eq("user_id", userId);
+        }
+      }
+
+      // Fallback: validate prefix against authenticated user strictly
+      const userPrefix = `privora/${userId}/`;
       if (typeof fullPublicId === "string" && fullPublicId.startsWith(userPrefix)) {
-        assetsToDelete.push(fullPublicId);
+        if (!assetsToDelete.includes(fullPublicId)) assetsToDelete.push(fullPublicId);
       }
       if (typeof thumbnailPublicId === "string" && thumbnailPublicId.startsWith(userPrefix)) {
-        assetsToDelete.push(thumbnailPublicId);
+        if (!assetsToDelete.includes(thumbnailPublicId)) assetsToDelete.push(thumbnailPublicId);
       }
 
       for (const pubId of assetsToDelete) {
-        const timestamp = Math.floor(Date.now() / 1000);
-        const signature = await signCloudinaryParams(
-          {
-            public_id: pubId,
-            timestamp: timestamp,
-            type: "authenticated",
-          },
-          apiSecret,
-        );
-
-        const formData = new FormData();
-        formData.append("public_id", pubId);
-        formData.append("timestamp", timestamp.toString());
-        formData.append("type", "authenticated");
-        formData.append("api_key", apiKey);
-        formData.append("signature", signature);
-
-        await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/destroy`, {
-          method: "POST",
-          body: formData,
-        });
+        await destroyAsset(pubId);
       }
 
       return new Response(
         JSON.stringify({ success: true, cleaned: assetsToDelete.length }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ACTION 6: cleanExpiredTrash (Scheduled backend worker or Admin call)
+    // -------------------------------------------------------------------------
+    if (action === "cleanExpiredTrash") {
+      if (!isServiceRole && !userId) {
+        return new Response(
+          JSON.stringify({ error: "Access denied." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const now = new Date().toISOString();
+
+      // Find expired photos across all users (or this user)
+      let query = dbClient
+        .from("photos")
+        .select("id, cloudinary_public_id, cloudinary_thumbnail_public_id, storage_provider")
+        .not("deleted_at", "is", null)
+        .not("delete_after", "is", null)
+        .lte("delete_after", now);
+
+      if (!isServiceRole) {
+        query = query.eq("user_id", userId);
+      }
+
+      const { data: expiredPhotos, error: fetchErr } = await query;
+      if (fetchErr) {
+        return new Response(
+          JSON.stringify({ error: fetchErr.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      let deletedCount = 0;
+      for (const photo of expiredPhotos || []) {
+        if (photo.storage_provider === "cloudinary") {
+          await destroyAsset(photo.cloudinary_public_id);
+          await destroyAsset(photo.cloudinary_thumbnail_public_id);
+        }
+        await dbClient.from("photos").delete().eq("id", photo.id);
+        deletedCount++;
+      }
+
+      // Mark abandoned pending uploads older than 2 hours
+      const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+      await dbClient
+        .from("pending_uploads")
+        .update({ status: "abandoned", updated_at: now })
+        .eq("status", "pending")
+        .lte("created_at", twoHoursAgo);
+
+      return new Response(
+        JSON.stringify({ success: true, expiredPhotosDeleted: deletedCount }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -365,7 +554,7 @@ serve(async (req: Request) => {
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: "Internal server error occurred." }),
+      JSON.stringify({ error: "Internal server error occurred.", details: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

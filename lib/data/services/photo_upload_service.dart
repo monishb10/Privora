@@ -108,6 +108,7 @@ class PhotoUploadService {
           cloudName: params.cloudName,
           apiKey: params.apiKey,
           timestamp: params.timestamp,
+          uploadPreset: params.uploadPreset,
           publicId: params.thumbnailPublicId,
           signature: params.thumbnailSignature,
           bytes: encryptedThumb,
@@ -121,6 +122,7 @@ class PhotoUploadService {
           cloudName: params.cloudName,
           apiKey: params.apiKey,
           timestamp: params.timestamp,
+          uploadPreset: params.uploadPreset,
           publicId: params.fullPublicId,
           signature: params.fullSignature,
           bytes: encryptedFull,
@@ -224,6 +226,7 @@ class PhotoUploadService {
         if (cloudinaryService != null) {
           try {
             await cloudinaryService!.cleanupFailedUpload(
+              photoId: photoId,
               fullPublicId: photoUploaded ? fullPublicId : null,
               thumbnailPublicId: thumbUploaded ? thumbPublicId : null,
             );

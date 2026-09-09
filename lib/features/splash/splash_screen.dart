@@ -67,27 +67,41 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ref.read(photoRepositoryProvider).cleanExpiredTrash(user.id);
     } catch (_) {}
 
-    // Verify vault setup from server record
-    final serverVault = await vaultRepo.getServerVaultData(user.id);
+    // Verify vault setup from server record with guarded error handling
+    Map<String, dynamic>? serverVault;
+    bool lookupFailed = false;
+    try {
+      serverVault = await vaultRepo.getServerVaultData(user.id);
+    } catch (e) {
+      debugPrint('Splash vault lookup failed or offline: $e');
+      lookupFailed = true;
+    }
     if (!mounted) return;
 
-    if (serverVault == null) {
-      // Rule: Authenticated user with no PIN/vault setup -> Create PIN
-      context.go('/create-pin');
+    final hasLocal = await vaultRepo.hasCompletedSetup(user.id);
+    if (!mounted) return;
+
+    if (lookupFailed) {
+      // Offline / network failure: allow unlock if local keys exist; never create replacement key
+      if (hasLocal) {
+        context.go('/unlock');
+      } else {
+        context.go('/login');
+      }
       return;
     }
 
-    // Server vault exists: check if local key material is present
-    final hasLocal = await vaultRepo.hasCompletedSetup(user.id);
-    if (!mounted) return;
+    if (serverVault == null) {
+      // Confirmed: Authenticated user with no PIN/vault setup -> Create PIN
+      context.go('/create-pin');
+      return;
+    }
 
     if (!hasLocal) {
       // Required local key material missing on this device -> Recovery flow
       context.go('/recover-vault');
       return;
     }
-
-    if (!mounted) return;
 
     // Rule: Authenticated and unlocked user -> Categories; otherwise Enter PIN
     if (!isLocked && vaultRepo.hasActiveKey) {

@@ -37,6 +37,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       ref.invalidate(recentlyDeletedPhotosProvider);
       ref.invalidate(storageUsageProvider);
       if (mounted) {
+        Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
         context.go('/login');
       }
     }

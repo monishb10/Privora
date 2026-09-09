@@ -73,6 +73,7 @@ class FakeCloudinaryMediaService extends Fake
     required String cloudName,
     required String apiKey,
     required int timestamp,
+    String? uploadPreset,
     required String publicId,
     required String signature,
     required Uint8List bytes,
@@ -142,6 +143,7 @@ class FakeCloudinaryMediaService extends Fake
 
   @override
   Future<void> cleanupFailedUpload({
+    String? photoId,
     String? fullPublicId,
     String? thumbnailPublicId,
   }) async {

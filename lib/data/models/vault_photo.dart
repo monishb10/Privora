@@ -79,7 +79,7 @@ class VaultPhoto {
     return VaultPhoto(
       id: json['id'] as String,
       userId: json['user_id'] as String,
-      categoryId: json['category_id'] as String,
+      categoryId: json['category_id'] as String? ?? '',
       storagePath: json['storage_path'] as String? ?? cPubId ?? '',
       thumbnailPath: json['thumbnail_path'] as String? ?? cThumbId ?? '',
       displayName: json['display_name'] as String,
@@ -117,7 +117,7 @@ class VaultPhoto {
     return {
       'id': id,
       'user_id': userId,
-      'category_id': categoryId,
+      'category_id': categoryId.isNotEmpty ? categoryId : null,
       'storage_path': storagePath,
       'thumbnail_path': thumbnailPath,
       'display_name': displayName,

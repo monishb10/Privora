@@ -153,19 +153,26 @@ class SupabaseAuthService {
     }
   }
 
-  /// Signs out of Google and Supabase
+  /// Signs out of Google and Supabase independently with bounded waits.
+  /// Uses disconnect() so the next login allows account selection rather than
+  /// silently reusing the previous account.
   Future<void> signOut() async {
-    // 1. Sign out of Google
+    // 1. Sign out of Google independently with bounded wait
     try {
-      await _googleSignIn.signOut();
+      await _googleSignIn.signOut().timeout(const Duration(seconds: 5));
+      try {
+        await _googleSignIn.disconnect().timeout(const Duration(seconds: 5));
+      } catch (discErr) {
+        debugPrint('Google disconnect note: $discErr');
+      }
     } catch (e) {
       debugPrint('Google signOut warning: $e');
     }
 
-    // 2. Sign out of Supabase
+    // 2. Sign out of Supabase independently with bounded wait
     try {
       if (SupabaseConfig.client != null) {
-        await _client.auth.signOut();
+        await _client.auth.signOut().timeout(const Duration(seconds: 5));
       }
     } catch (e) {
       debugPrint('Supabase signOut error: $e');

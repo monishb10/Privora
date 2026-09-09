@@ -11,6 +11,7 @@ class CloudinaryUploadParams {
   final String cloudName;
   final String apiKey;
   final int timestamp;
+  final String? uploadPreset;
   final String resourceType;
   final String type;
   final String photoId;
@@ -23,6 +24,7 @@ class CloudinaryUploadParams {
     required this.cloudName,
     required this.apiKey,
     required this.timestamp,
+    this.uploadPreset,
     required this.resourceType,
     required this.type,
     required this.photoId,
@@ -40,6 +42,7 @@ class CloudinaryUploadParams {
       cloudName: json['cloudName'] as String,
       apiKey: json['apiKey'] as String,
       timestamp: json['timestamp'] as int,
+      uploadPreset: json['uploadPreset'] as String?,
       resourceType: json['resourceType'] as String? ?? 'raw',
       type: json['type'] as String? ?? 'authenticated',
       photoId: json['photoId'] as String,
@@ -67,7 +70,7 @@ class CloudinaryUploadResult {
 }
 
 /// Service managing client-side interaction with Cloudinary and the
-/// Supabase Edge Function for signed uploads, downloads, and deletions.
+/// Supabase Edge Function for signed uploads, downloads, commits, and deletions.
 class CloudinaryMediaService {
   final http.Client _httpClient;
 
@@ -126,6 +129,7 @@ class CloudinaryMediaService {
     required String cloudName,
     required String apiKey,
     required int timestamp,
+    String? uploadPreset,
     required String publicId,
     required String signature,
     required Uint8List bytes,
@@ -142,6 +146,9 @@ class CloudinaryMediaService {
       request.fields['public_id'] = publicId;
       request.fields['type'] = 'authenticated';
       request.fields['signature'] = signature;
+      if (uploadPreset != null && uploadPreset.isNotEmpty) {
+        request.fields['upload_preset'] = uploadPreset;
+      }
 
       request.files.add(
         http.MultipartFile.fromBytes('file', bytes, filename: filename),
@@ -171,6 +178,56 @@ class CloudinaryMediaService {
       );
     } catch (e) {
       debugPrint('uploadEncryptedBytes error: $e');
+      if (e is AppException) rethrow;
+      throw StorageException(ErrorMapper.mapToUserMessage(e));
+    }
+  }
+
+  /// Commits photo metadata via Edge Function after verifying Cloudinary assets.
+  Future<Map<String, dynamic>> commitUpload({
+    required String photoId,
+    required String categoryId,
+    required String displayName,
+    required String mimeType,
+    required int encryptedSize,
+    int? width,
+    int? height,
+    String? assetId,
+    String? version,
+  }) async {
+    try {
+      final response = await _client.functions
+          .invoke(
+            'cloudinary-media',
+            body: {
+              'action': 'commitUpload',
+              'photoId': photoId,
+              'categoryId': categoryId,
+              'displayName': displayName,
+              'mimeType': mimeType,
+              'encryptedSize': encryptedSize,
+              'width': ?width,
+              'height': ?height,
+              'assetId': ?assetId,
+              'version': ?version,
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.status != 200) {
+        final errorMsg = response.data is Map
+            ? response.data['error']?.toString()
+            : 'Edge Function returned error ${response.status}';
+        throw StorageException(errorMsg ?? 'Failed to commit photo metadata.');
+      }
+
+      final data = response.data is Map
+          ? response.data as Map<String, dynamic>
+          : jsonDecode(response.data.toString()) as Map<String, dynamic>;
+
+      return data['photo'] as Map<String, dynamic>? ?? data;
+    } catch (e) {
+      debugPrint('commitUpload error: $e');
       if (e is AppException) rethrow;
       throw StorageException(ErrorMapper.mapToUserMessage(e));
     }
@@ -265,19 +322,24 @@ class CloudinaryMediaService {
   }
 
   /// Cleans up orphaned or partially uploaded assets in Cloudinary.
+  /// Prefers server-tracked photoId from pending_uploads table.
   Future<void> cleanupFailedUpload({
+    String? photoId,
     String? fullPublicId,
     String? thumbnailPublicId,
   }) async {
-    if (fullPublicId == null && thumbnailPublicId == null) return;
+    if (photoId == null && fullPublicId == null && thumbnailPublicId == null) {
+      return;
+    }
     try {
       await _client.functions
           .invoke(
             'cloudinary-media',
             body: {
               'action': 'cleanupFailedUpload',
-              'fullPublicId': fullPublicId,
-              'thumbnailPublicId': thumbnailPublicId,
+              'photoId': ?photoId,
+              'fullPublicId': ?fullPublicId,
+              'thumbnailPublicId': ?thumbnailPublicId,
             },
           )
           .timeout(const Duration(seconds: 15));

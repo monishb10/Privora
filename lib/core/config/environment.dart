@@ -5,13 +5,13 @@ class Environment {
   /// Supabase Project URL
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://placeholder-project.supabase.co',
+    defaultValue: 'https://crpglfjxrxnmfgssijcq.supabase.co',
   );
 
   /// Supabase Anonymous/Publishable Key (Never use the service-role key!)
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder-anon-key',
+    defaultValue: 'sb_publishable_qdgGSBhS8Dzi2Jl-XZgo4w_4mwsR9sl',
   );
 
   /// Flag to enable or hide Google Login
