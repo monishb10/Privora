@@ -129,7 +129,7 @@ class VaultPhoto {
       'updated_at': updatedAt.toIso8601String(),
       if (deletedAt != null) 'deleted_at': deletedAt?.toIso8601String(),
       if (deleteAfter != null) 'delete_after': deleteAfter?.toIso8601String(),
-      'storage_provider': storageProvider,
+      if (storageProvider != 'supabase') 'storage_provider': storageProvider,
       if (cloudinaryPublicId != null)
         'cloudinary_public_id': cloudinaryPublicId,
       if (cloudinaryThumbnailPublicId != null)

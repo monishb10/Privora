@@ -64,6 +64,12 @@ class AuthRepository {
     return authService.sendPasswordResetEmail(email);
   }
 
+  String? get googlePhotoUrl => authService.googlePhotoUrl;
+
+  Future<sp.UserResponse> updateUserMetadata(Map<String, dynamic> data) {
+    return authService.updateUserMetadata(data);
+  }
+
   /// Full clean sign out protocol:
   /// 1. Immediately locks the vault.
   /// 2. Clears the decrypted vault key from memory.

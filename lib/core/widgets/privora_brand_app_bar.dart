@@ -84,26 +84,22 @@ class PrivoraBrandAppBar extends StatelessWidget
               : Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Mathematically centred logo & title
+                    // Left corner: Privora logo icon only
+                    const Positioned(
+                      left: 16,
+                      child: PrivoraLogo(size: 30, showShadow: false),
+                    ),
+
+                    // Mathematically centred brand title
                     Center(
                       child: Padding(
-                        // 104px symmetrical margins preserve perfect center while guarding actions
-                        padding: const EdgeInsets.symmetric(horizontal: 104),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const PrivoraLogo(size: 30, showShadow: false),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                AppConstants.appName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.brandTitle,
-                              ),
-                            ),
-                          ],
+                        // Symmetrical margins preserve perfect center while guarding actions and logo
+                        padding: const EdgeInsets.symmetric(horizontal: 96),
+                        child: Text(
+                          AppConstants.appName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.brandTitle,
                         ),
                       ),
                     ),

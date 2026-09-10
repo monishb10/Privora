@@ -89,13 +89,19 @@ class ErrorMapper {
 
     if (error is sp.StorageException) {
       final status = error.statusCode;
+      final msg = error.message.toLowerCase();
+      if (status == '404' ||
+          msg.contains('bucket not found') ||
+          msg.contains('nosuchbucket')) {
+        return 'Storage bucket "private-photos" not found. Please create the private bucket in Supabase Dashboard (or run storage_policies.sql in the SQL Editor).';
+      }
       if (status == '403') {
         return 'Storage access denied. Your session may have expired.';
       }
       if (status == '413') {
         return 'File size is too large to upload.';
       }
-      return 'Storage transfer failed. Please check your connection and retry.';
+      return 'Storage transfer failed: ${error.message}';
     }
 
     // Default fallback - never leak internal system stack traces

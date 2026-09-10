@@ -33,6 +33,35 @@ class SupabaseStorageService {
             ),
           );
       return path;
+    } on sp.StorageException catch (se) {
+      final msg = se.message.toLowerCase();
+      if (se.statusCode == '404' ||
+          msg.contains('bucket not found') ||
+          msg.contains('nosuchbucket')) {
+        try {
+          await _client.storage.createBucket(
+            StorageConstants.privatePhotosBucket,
+            const sp.BucketOptions(public: false),
+          );
+          await _client.storage
+              .from(StorageConstants.privatePhotosBucket)
+              .uploadBinary(
+                path,
+                bytes,
+                fileOptions: const sp.FileOptions(
+                  contentType: 'application/octet-stream',
+                  upsert: true,
+                ),
+              );
+          return path;
+        } catch (_) {
+          throw const StorageException(
+            'Storage bucket "private-photos" not found. Please create the private bucket in Supabase Dashboard (or run storage_policies.sql in the SQL Editor).',
+          );
+        }
+      }
+      debugPrint('uploadEncryptedBytes StorageException at $path: $se');
+      throw StorageException(ErrorMapper.mapToUserMessage(se));
     } catch (e) {
       debugPrint('uploadEncryptedBytes error at $path: $e');
       throw StorageException(ErrorMapper.mapToUserMessage(e));

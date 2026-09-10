@@ -205,6 +205,23 @@ class SupabaseAuthService {
         debugPrint(
           '[Auth] Supabase authentication successful. User ID: ${response.user?.id}',
         );
+
+        // Synchronize Google avatar into Supabase user metadata
+        if (googleUser.photoUrl != null && googleUser.photoUrl!.isNotEmpty) {
+          try {
+            await _client.auth.updateUser(
+              sp.UserAttributes(
+                data: {
+                  'avatar_url': googleUser.photoUrl,
+                  'picture': googleUser.photoUrl,
+                },
+              ),
+            );
+          } catch (updateErr) {
+            debugPrint('[Auth] Note: could not update avatar_url: $updateErr');
+          }
+        }
+
         return response;
       } on sp.AuthException catch (sae) {
         debugPrint(
@@ -317,6 +334,19 @@ class SupabaseAuthService {
       }
     } catch (e) {
       debugPrint('Supabase signOut error: $e');
+    }
+  }
+
+  /// Gets the currently signed in Google account photo URL if available
+  String? get googlePhotoUrl => _googleSignIn.currentUser?.photoUrl;
+
+  /// Updates user profile metadata (e.g. avatar_url, display_name)
+  Future<sp.UserResponse> updateUserMetadata(Map<String, dynamic> data) async {
+    try {
+      return await _client.auth.updateUser(sp.UserAttributes(data: data));
+    } catch (e) {
+      debugPrint('updateUserMetadata error: $e');
+      throw AuthException(ErrorMapper.mapToUserMessage(e));
     }
   }
 }

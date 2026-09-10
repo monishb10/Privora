@@ -23,6 +23,7 @@ class PhotoUploadService {
   final SupabaseDatabaseService databaseService;
   final TemporaryFileCleaner cleaner;
   final Uuid uuid;
+  bool _cloudinaryUnavailable = false;
 
   PhotoUploadService({
     required this.cryptoService,
@@ -90,15 +91,36 @@ class PhotoUploadService {
       );
 
       final cService = cloudinaryService;
-      if (cService != null) {
-        // --- CLOUDINARY UPLOAD FLOW ---
-        // 4. Request signed upload parameters from Edge Function
-        update(UploadStatus.uploadingThumbnail, 0.5);
-        final params = await cService.createUploadSignature(
-          categoryId: categoryId,
-          photoId: photoId,
-        );
+      CloudinaryUploadParams? params;
 
+      if (cService != null && !_cloudinaryUnavailable) {
+        try {
+          update(UploadStatus.uploadingThumbnail, 0.5);
+          params = await cService.createUploadSignature(
+            categoryId: categoryId,
+            photoId: photoId,
+          );
+        } catch (sigErr) {
+          final errStr = sigErr.toString().toLowerCase();
+          final isUnavailable = errStr.contains('404') ||
+              errStr.contains('not found') ||
+              errStr.contains('not configured') ||
+              errStr.contains('function not found');
+
+          if (isUnavailable) {
+            debugPrint(
+              '[PhotoUploadService] Cloudinary backend not deployed: $sigErr. Falling back to Supabase Storage.',
+            );
+            _cloudinaryUnavailable = true;
+            params = null;
+          } else {
+            rethrow;
+          }
+        }
+      }
+
+      if (params != null && cService != null) {
+        // --- CLOUDINARY UPLOAD FLOW ---
         fullPublicId = params.fullPublicId;
         thumbPublicId = params.thumbnailPublicId;
 
@@ -165,7 +187,7 @@ class PhotoUploadService {
         update(UploadStatus.completed, 1.0);
         return insertedPhoto;
       } else {
-        // --- LEGACY SUPABASE STORAGE FALLBACK ---
+        // --- SUPABASE STORAGE FLOW (Fallback / Default) ---
         final sService = storageService;
         if (sService == null) {
           throw const StorageException('No storage service configured.');
@@ -223,7 +245,7 @@ class PhotoUploadService {
       // CRITICAL ROLLBACK: Clean up orphaned cloud storage objects on failure
       if (photoUploaded || thumbUploaded) {
         debugPrint('Rollback: Cleaning orphaned cloud storage objects...');
-        if (cloudinaryService != null) {
+        if (fullPublicId != null && cloudinaryService != null) {
           try {
             await cloudinaryService!.cleanupFailedUpload(
               photoId: photoId,

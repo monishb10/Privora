@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../app/providers.dart';
+import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/privora_button.dart';
@@ -52,8 +53,19 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
     if (_isUploading) return;
 
     try {
-      // Pick multiple photos using Android system photo picker
-      final picked = await _picker.pickMultiImage();
+      // Pick multiple photos using Android system photo picker, with fallback to single pick
+      List<XFile> picked = [];
+      try {
+        picked = await _picker.pickMultiImage();
+      } catch (multiErr) {
+        debugPrint(
+          '[ImportPhoto] pickMultiImage failed ($multiErr), falling back to pickImage',
+        );
+        final single = await _picker.pickImage(source: ImageSource.gallery);
+        if (single != null) {
+          picked = [single];
+        }
+      }
 
       // If user closed or cancelled picker without selecting photos, close quietly without error
       if (picked.isEmpty) {
@@ -112,6 +124,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
     final cleaner = ref.read(temporaryFileCleanerProvider);
     final newlyFailed = <XFile>[];
     int newlySucceeded = 0;
+    String? lastFailureMessage;
 
     // Process sequentially (one at a time) to prevent memory crashes with high-res photos
     for (int i = 0; i < filesToUpload.length; i++) {
@@ -142,6 +155,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
       } catch (e) {
         debugPrint('Upload error for ${file.name}: $e');
         newlyFailed.add(file);
+        lastFailureMessage = e is AppException ? e.message : e.toString();
       } finally {
         // Clean up temporary encrypted/decrypted chunks after each photo
         await cleaner.cleanTemporaryFiles();
@@ -158,6 +172,9 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
       _isComplete = true;
       _successCount += newlySucceeded;
       _failedFiles = newlyFailed;
+      if (newlyFailed.isNotEmpty && lastFailureMessage != null) {
+        _errorMessage = lastFailureMessage;
+      }
     });
 
     // Final disk hygiene pass

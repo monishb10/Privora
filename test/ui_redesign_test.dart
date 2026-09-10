@@ -43,12 +43,13 @@ void main() {
         expect(textWidget.style?.fontSize, inInclusiveRange(25.0, 28.0));
         expect(textWidget.style?.color, equals(AppColors.primaryText));
 
-        // Verify mathematical centering: center of title/logo row is exactly 200 (screenWidth / 2)
-        final rowFinder = find
-            .ancestor(of: find.byType(PrivoraLogo), matching: find.byType(Row))
-            .first;
-        final rowCenter = tester.getCenter(rowFinder);
-        expect(rowCenter.dx, equals(200.0));
+        // Verify Privora logo is positioned at the left-side corner
+        final logoTopLeft = tester.getTopLeft(find.byType(PrivoraLogo));
+        expect(logoTopLeft.dx, equals(16.0));
+
+        // Verify mathematical centering: center of title is exactly 200 (screenWidth / 2)
+        final titleCenter = tester.getCenter(find.text(AppConstants.appName));
+        expect(titleCenter.dx, equals(200.0));
 
         // Verify right action buttons exist with 48px touch targets
         final searchButton = find.byTooltip('Search Categories');
