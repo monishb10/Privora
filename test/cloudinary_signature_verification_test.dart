@@ -90,12 +90,14 @@ void main() {
       final fullSignedParams = <String, String>{
         'public_id': fullPublicId,
         'timestamp': timestamp,
+        'type': 'authenticated',
         'upload_preset': uploadPreset,
       };
 
       final thumbSignedParams = <String, String>{
         'public_id': thumbPublicId,
         'timestamp': timestamp,
+        'type': 'authenticated',
         'upload_preset': uploadPreset,
       };
 
@@ -121,6 +123,7 @@ void main() {
       final alteredThumbParams = <String, String>{
         'public_id': '${thumbPublicId}_v2',
         'timestamp': timestamp,
+        'type': 'authenticated',
         'upload_preset': uploadPreset,
       };
       final alteredThumbSignature = await calculateCanonicalSignature(
@@ -143,6 +146,7 @@ void main() {
         final signedParams = <String, String>{
           'public_id': 'privora/user-1/cat-1/my-photo',
           'timestamp': '1770000000',
+          'type': 'authenticated',
           'upload_preset': uploadPreset,
         };
         final signature = await calculateCanonicalSignature(
@@ -176,10 +180,15 @@ void main() {
           );
         }
 
-        // Must hit canonical /raw/authenticated endpoint
+        // Must hit /raw/upload endpoint, NOT /raw/authenticated
         expect(
           mockClient.capturedUri.toString(),
-          'https://api.cloudinary.com/v1_1/$cloudName/raw/authenticated',
+          'https://api.cloudinary.com/v1_1/$cloudName/raw/upload',
+        );
+        expect(
+          mockClient.capturedUri.toString().contains('/raw/authenticated'),
+          isFalse,
+          reason: 'Must never use /raw/authenticated as the upload endpoint',
         );
       },
     );
@@ -197,6 +206,7 @@ void main() {
         final signedWithPreset = <String, String>{
           'public_id': 'privora/u/c/p1',
           'timestamp': '1770000000',
+          'type': 'authenticated',
           'upload_preset': 'privora_signed',
         };
         final sigWithPreset = await calculateCanonicalSignature(
@@ -221,11 +231,13 @@ void main() {
           mockClient.capturedFields['upload_preset'],
           equals('privora_signed'),
         );
+        expect(mockClient.capturedFields['type'], equals('authenticated'));
 
         // Case B: Preset is omitted
         final signedWithoutPreset = <String, String>{
           'public_id': 'privora/u/c/p2',
           'timestamp': '1770000000',
+          'type': 'authenticated',
         };
         final sigWithoutPreset = await calculateCanonicalSignature(
           signedWithoutPreset,
@@ -246,14 +258,15 @@ void main() {
         // Omitted from both sides
         expect(signedWithoutPreset.containsKey('upload_preset'), isFalse);
         expect(mockClient.capturedFields.containsKey('upload_preset'), isFalse);
+        expect(mockClient.capturedFields['type'], equals('authenticated'));
       },
     );
 
     // -------------------------------------------------------------------------
-    // 4. No unsigned extra parameter is submitted (resource_type/type excluded)
+    // 4. No unsigned extra parameter is submitted (resource_type excluded)
     // -------------------------------------------------------------------------
     test(
-      '4. Multipart request contains only file, api_key, signature, and signedParams; excludes resource_type and type',
+      '4. Multipart request contains only file, api_key, signature, and signedParams (including type=authenticated); excludes resource_type',
       () async {
         final mockClient = MockCloudinaryHttpClient();
         final service = CloudinaryMediaService(httpClient: mockClient);
@@ -261,6 +274,7 @@ void main() {
         final signedParams = <String, String>{
           'public_id': 'privora/u/c/p3',
           'timestamp': '1770000000',
+          'type': 'authenticated',
           'upload_preset': 'privora_signed',
         };
         final signature = await calculateCanonicalSignature(
@@ -281,17 +295,15 @@ void main() {
 
         final fields = mockClient.capturedFields;
 
-        // Strictly forbidden in fields because they are in the endpoint URL
+        // Strictly forbidden in fields because raw is already in the endpoint URL
         expect(
           fields.containsKey('resource_type'),
           isFalse,
           reason: 'resource_type must NOT be sent in multipart fields',
         );
-        expect(
-          fields.containsKey('type'),
-          isFalse,
-          reason: 'type must NOT be sent in multipart fields',
-        );
+
+        // type=authenticated must be present
+        expect(fields['type'], equals('authenticated'));
 
         // Allowed field keys are strictly: api_key, signature, and every key in signedParams
         final expectedKeys = {'api_key', 'signature', ...signedParams.keys};
@@ -506,13 +518,11 @@ class _RollbackTrackingCloudinaryService extends Fake
     String? thumbnailPublicId,
   )
   onCleanup;
-  final bool failThumbnail;
   final bool failFull;
   int cleanupCalls = 0;
 
   _RollbackTrackingCloudinaryService({
     required this.onCleanup,
-    this.failThumbnail = false,
     this.failFull = false,
   });
 
@@ -533,11 +543,13 @@ class _RollbackTrackingCloudinaryService extends Fake
       fullSignedParams: {
         'public_id': 'privora/user-1/$categoryId/$photoId',
         'timestamp': '1770000000',
+        'type': 'authenticated',
         'upload_preset': 'privora_signed',
       },
       thumbnailSignedParams: {
         'public_id': 'privora/user-1/$categoryId/${photoId}_thumb',
         'timestamp': '1770000000',
+        'type': 'authenticated',
         'upload_preset': 'privora_signed',
       },
     );
@@ -556,9 +568,6 @@ class _RollbackTrackingCloudinaryService extends Fake
     Map<String, String>? signedParams,
     String stage = 'upload',
   }) async {
-    if (failThumbnail && publicId.endsWith('_thumb')) {
-      throw const StorageException('Simulated thumbnail upload failure');
-    }
     if (failFull && !publicId.endsWith('_thumb')) {
       throw const StorageException('Simulated full photo upload failure');
     }

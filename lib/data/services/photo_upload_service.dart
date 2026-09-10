@@ -139,6 +139,7 @@ class PhotoUploadService {
             : {
                 'public_id': params.thumbnailPublicId,
                 'timestamp': params.timestamp.toString(),
+                'type': 'authenticated',
                 if (params.uploadPreset != null &&
                     params.uploadPreset!.isNotEmpty)
                   'upload_preset': params.uploadPreset!,
@@ -170,6 +171,7 @@ class PhotoUploadService {
             : {
                 'public_id': params.fullPublicId,
                 'timestamp': params.timestamp.toString(),
+                'type': 'authenticated',
                 if (params.uploadPreset != null &&
                     params.uploadPreset!.isNotEmpty)
                   'upload_preset': params.uploadPreset!,

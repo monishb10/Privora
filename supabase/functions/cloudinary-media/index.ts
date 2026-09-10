@@ -167,6 +167,7 @@ serve(async (req: Request) => {
       const fullSignedParams: Record<string, string> = {
         public_id: fullPublicId,
         timestamp: timestamp,
+        type: "authenticated",
       };
       if (uploadPreset && uploadPreset.length > 0) {
         fullSignedParams["upload_preset"] = uploadPreset;
@@ -177,6 +178,7 @@ serve(async (req: Request) => {
       const thumbSignedParams: Record<string, string> = {
         public_id: thumbPublicId,
         timestamp: timestamp,
+        type: "authenticated",
       };
       if (uploadPreset && uploadPreset.length > 0) {
         thumbSignedParams["upload_preset"] = uploadPreset;

@@ -62,6 +62,9 @@ class CloudinaryUploadParams {
         fullSigned['upload_preset'] = json['uploadPreset'] as String;
       }
     }
+    if (!fullSigned.containsKey('type')) {
+      fullSigned['type'] = json['type'] as String? ?? 'authenticated';
+    }
 
     final thumbSigned = <String, String>{};
     if (thumb['signedParams'] is Map) {
@@ -77,6 +80,9 @@ class CloudinaryUploadParams {
           (json['uploadPreset'] as String).isNotEmpty) {
         thumbSigned['upload_preset'] = json['uploadPreset'] as String;
       }
+    }
+    if (!thumbSigned.containsKey('type')) {
+      thumbSigned['type'] = json['type'] as String? ?? 'authenticated';
     }
 
     final timestampInt = json['timestamp'] is int
@@ -250,8 +256,7 @@ class CloudinaryMediaService {
   }
 
   /// Uploads encrypted ciphertext bytes directly to Cloudinary using multipart/form-data.
-  /// Uses REST endpoint: https://api.cloudinary.com/v1_1/{cloud_name}/raw/authenticated
-  /// Neither resource_type nor type are sent in multipart fields.
+  /// Uses REST endpoint: https://api.cloudinary.com/v1_1/{cloud_name}/raw/upload
   Future<CloudinaryUploadResult> uploadEncryptedBytes({
     required String cloudName,
     required String apiKey,
@@ -266,11 +271,11 @@ class CloudinaryMediaService {
   }) async {
     try {
       final uri = Uri.parse(
-        'https://api.cloudinary.com/v1_1/$cloudName/raw/authenticated',
+        'https://api.cloudinary.com/v1_1/$cloudName/raw/upload',
       );
       final request = http.MultipartRequest('POST', uri);
 
-      // Multipart request contains ONLY: file, api_key, signature, and every exact entry in signedParams
+      // Multipart request contains: file, api_key, signature, and every exact entry in signedParams
       request.fields['api_key'] = apiKey;
       request.fields['signature'] = signature;
 
@@ -279,12 +284,18 @@ class CloudinaryMediaService {
           {
             'public_id': publicId,
             'timestamp': timestamp.toString(),
+            'type': 'authenticated',
             if (uploadPreset != null && uploadPreset.isNotEmpty)
               'upload_preset': uploadPreset,
           };
 
       for (final entry in effectiveSignedParams.entries) {
         request.fields[entry.key] = entry.value;
+      }
+
+      // Ensure type=authenticated is always included in multipart fields
+      if (!request.fields.containsKey('type')) {
+        request.fields['type'] = 'authenticated';
       }
 
       request.files.add(
