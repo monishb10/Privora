@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:privora/app/providers.dart';
 import 'package:privora/core/constants/app_constants.dart';
+import 'package:privora/core/errors/app_exception.dart';
 import 'package:privora/core/security/vault_crypto_service.dart';
 import 'package:privora/core/theme/app_theme.dart';
 import 'package:privora/core/widgets/privora_brand_app_bar.dart';
@@ -76,9 +77,9 @@ void main() {
     });
   });
 
-  group('PhotoUploadService Fallback to Supabase Storage', () {
+  group('PhotoUploadService Cloudinary Strict Upload and Supabase Storage', () {
     test(
-      'Automatically falls back to Supabase Storage when Cloudinary Edge Function returns 404',
+      'Throws StorageException with Stage 9 details when Cloudinary Edge Function returns 404 (no silent fallback)',
       () async {
         final crypto = VaultCryptoService(iterations: 1000);
         final fakeCloudinary404 = Failing404CloudinaryMediaService();
@@ -100,6 +101,51 @@ void main() {
 
         final masterKey = crypto.generateMasterKey();
 
+        await expectLater(
+          uploadService.uploadPhoto(
+            sourceFile: testFile,
+            userId: 'user-123',
+            categoryId: 'cat-123',
+            masterKey: masterKey,
+          ),
+          throwsA(
+            isA<StorageException>().having(
+              (e) => e.message,
+              'message',
+              contains('Cloud authorization failed'),
+            ),
+          ),
+        );
+
+        // Verify storage was NOT silently written to
+        expect(fakeStorage.uploadCalls, equals(0));
+
+        await tempDir.delete(recursive: true);
+      },
+    );
+
+    test(
+      'Uploads to Supabase Storage when cloudinaryService is not configured',
+      () async {
+        final crypto = VaultCryptoService(iterations: 1000);
+        final fakeStorage = FakeSupabaseStorageService();
+        final fakeDb = FakeSupabaseDatabaseService();
+        final fakeCleaner = FakeTemporaryFileCleaner();
+
+        final uploadService = PhotoUploadService(
+          cryptoService: crypto,
+          cloudinaryService: null,
+          storageService: fakeStorage,
+          databaseService: fakeDb,
+          cleaner: fakeCleaner,
+        );
+
+        final tempDir = await Directory.systemTemp.createTemp('upload_test_');
+        final testFile = File('${tempDir.path}/sample.jpg');
+        await testFile.writeAsBytes(List.generate(100, (i) => i));
+
+        final masterKey = crypto.generateMasterKey();
+
         final result = await uploadService.uploadPhoto(
           sourceFile: testFile,
           userId: 'user-123',
@@ -107,7 +153,6 @@ void main() {
           masterKey: masterKey,
         );
 
-        // Verify fallback succeeded using Supabase storage
         expect(result.storageProvider, equals('supabase'));
         expect(fakeStorage.uploadCalls, equals(2));
         expect(fakeDb.storedPhotos.containsKey(result.id), isTrue);
@@ -192,10 +237,7 @@ void main() {
       final mockUser = sp.User(
         id: 'user-456',
         appMetadata: {},
-        userMetadata: {
-          'full_name': 'Alex Smith',
-          'avatar_url': '',
-        },
+        userMetadata: {'full_name': 'Alex Smith', 'avatar_url': ''},
         aud: 'authenticated',
         createdAt: DateTime.now().toIso8601String(),
       );

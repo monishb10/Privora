@@ -1,17 +1,17 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../app/providers.dart';
 import '../../core/errors/app_exception.dart';
+import '../../core/models/pending_import_context.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/import_pipeline_logger.dart';
 import '../../core/widgets/privora_button.dart';
 import '../../data/models/upload_state.dart';
 
-/// Screen managing multi-photo selection and resilient batch ingestion from the phone gallery.
-/// Implements sequential encryption and upload, progress reporting ("Uploading X of Y"),
-/// partial-failure resilience with failed-only retry, and zero modification of original gallery files.
+/// Screen managing multi-photo selection, Android lifecycle preservation,
+/// stage-specific diagnostics, and resilient batch ingestion from the phone gallery.
 class ImportPhotoScreen extends ConsumerStatefulWidget {
   final String categoryId;
   final String categoryName;
@@ -27,9 +27,9 @@ class ImportPhotoScreen extends ConsumerStatefulWidget {
 }
 
 class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
-  final ImagePicker _picker = ImagePicker();
-  List<XFile> _selectedFiles = [];
-  List<XFile> _failedFiles = [];
+  List<File> _selectedFiles = [];
+  List<File> _failedFiles = [];
+  PendingImportContext? _importContext;
   bool _isUploading = false;
   bool _isComplete = false;
   int _successCount = 0;
@@ -41,9 +41,37 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
   @override
   void initState() {
     super.initState();
-    // Open the system photo picker shortly after screen mount
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _selectedFiles.isEmpty) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final user = ref.read(currentUserProvider);
+      if (user == null) return;
+
+      final importService = ref.read(galleryImportServiceProvider);
+      // Check for lost data recovered across Android activity destruction/restart
+      final recovered = await importService.checkAndRecoverLostData(
+        currentUserId: user.id,
+      );
+
+      if (recovered != null &&
+          recovered.files.isNotEmpty &&
+          recovered.context.categoryId == widget.categoryId) {
+        if (mounted) {
+          ImportPipelineLogger.logStage(
+            ImportStage.filesSelected,
+            requestId: recovered.context.requestId,
+            details:
+                'Recovered ${recovered.files.length} photo(s) across activity restart',
+          );
+          setState(() {
+            _selectedFiles = recovered.files;
+            _importContext = recovered.context;
+            _failedFiles = [];
+            _successCount = 0;
+            _isComplete = false;
+            _errorMessage = null;
+          });
+        }
+      } else if (mounted && _selectedFiles.isEmpty) {
         _pickGalleryPhotos();
       }
     });
@@ -52,49 +80,65 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
   Future<void> _pickGalleryPhotos() async {
     if (_isUploading) return;
 
-    try {
-      // Pick multiple photos using Android system photo picker, with fallback to single pick
-      List<XFile> picked = [];
-      try {
-        picked = await _picker.pickMultiImage();
-      } catch (multiErr) {
-        debugPrint(
-          '[ImportPhoto] pickMultiImage failed ($multiErr), falling back to pickImage',
-        );
-        final single = await _picker.pickImage(source: ImageSource.gallery);
-        if (single != null) {
-          picked = [single];
-        }
-      }
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      setState(
+        () => _errorMessage = 'User session is not active. Please sign in.',
+      );
+      return;
+    }
 
-      // If user closed or cancelled picker without selecting photos, close quietly without error
-      if (picked.isEmpty) {
+    final importService = ref.read(galleryImportServiceProvider);
+    final sessionLockNotifier = ref.read(sessionLockServiceProvider.notifier);
+
+    try {
+      sessionLockNotifier.markExternalActivityActive(true);
+      final result = await importService.launchPicker(
+        userId: user.id,
+        categoryId: widget.categoryId,
+        categoryName: widget.categoryName,
+        onExternalActivityChanged: (active) {
+          sessionLockNotifier.markExternalActivityActive(active);
+        },
+      );
+
+      sessionLockNotifier.setPendingImportContext(result.context);
+
+      // User cancellation: clear context quietly without error banner
+      if (result.isCancelled || result.files.isEmpty) {
+        sessionLockNotifier.clearPendingImportContext();
         return;
       }
 
       setState(() {
-        _selectedFiles = picked;
+        _selectedFiles = result.files;
+        _importContext = result.context;
         _failedFiles = [];
         _successCount = 0;
         _isComplete = false;
         _errorMessage = null;
       });
     } catch (e) {
+      debugPrint('[ImportPhotoScreen] Error opening photo picker: $e');
       if (mounted) {
         setState(() {
-          _errorMessage = 'Failed to open photo picker: $e';
+          _errorMessage = ImportPipelineLogger.getUserFriendlyErrorMessage(
+            ImportStage.pickerLaunched,
+            e,
+          );
         });
       }
+    } finally {
+      sessionLockNotifier.markExternalActivityActive(false);
     }
   }
 
   Future<void> _startImport({bool retryOnlyFailed = false}) async {
-    // Prevent duplicate taps from starting concurrent batch uploads
     if (_isUploading) return;
 
     final filesToUpload = retryOnlyFailed
-        ? List<XFile>.from(_failedFiles)
-        : List<XFile>.from(_selectedFiles);
+        ? List<File>.from(_failedFiles)
+        : List<File>.from(_selectedFiles);
     if (filesToUpload.isEmpty) return;
 
     final user = ref.read(currentUserProvider);
@@ -103,7 +147,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
     if (user == null || masterKey == null) {
       setState(
         () => _errorMessage =
-            'Session locked or expired. Please unlock your vault.',
+            'Session locked or vault not unlocked. Please unlock your vault before encrypting photos.',
       );
       return;
     }
@@ -122,11 +166,14 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
 
     final uploadService = ref.read(photoUploadServiceProvider);
     final cleaner = ref.read(temporaryFileCleanerProvider);
-    final newlyFailed = <XFile>[];
+    final importService = ref.read(galleryImportServiceProvider);
+    final sessionLockNotifier = ref.read(sessionLockServiceProvider.notifier);
+
+    final newlyFailed = <File>[];
     int newlySucceeded = 0;
     String? lastFailureMessage;
 
-    // Process sequentially (one at a time) to prevent memory crashes with high-res photos
+    // Process sequentially (1 at a time) for memory stability and bounded resource usage
     for (int i = 0; i < filesToUpload.length; i++) {
       if (!mounted) break;
       final file = filesToUpload[i];
@@ -137,11 +184,11 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
 
       try {
         await uploadService.uploadPhoto(
-          sourceFile: File(file.path),
+          sourceFile: file,
           userId: user.id,
           categoryId: widget.categoryId,
           masterKey: masterKey,
-          deleteSourceFile: false,
+          deleteSourceFile: true, // Delete app-private temp file upon success
           onStateChanged: (state) {
             if (mounted) {
               setState(() {
@@ -153,17 +200,30 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
 
         newlySucceeded++;
       } catch (e) {
-        debugPrint('Upload error for ${file.name}: $e');
+        debugPrint('[ImportPhotoScreen] Upload error for ${file.path}: $e');
         newlyFailed.add(file);
         lastFailureMessage = e is AppException ? e.message : e.toString();
       } finally {
-        // Clean up temporary encrypted/decrypted chunks after each photo
         await cleaner.cleanTemporaryFiles();
       }
     }
 
     // Refresh categories and gallery once at the end of the batch
     ref.invalidate(categoriesProvider);
+    ImportPipelineLogger.logStage(
+      ImportStage.categoryRefreshed,
+      requestId: _importContext?.requestId,
+      details: 'category ${widget.categoryId} refreshed',
+    );
+
+    if (_importContext != null && newlyFailed.isEmpty) {
+      await importService.cleanupRequest(_importContext!.requestId);
+      sessionLockNotifier.clearPendingImportContext();
+      ImportPipelineLogger.logStage(
+        ImportStage.tempFilesCleaned,
+        requestId: _importContext?.requestId,
+      );
+    }
 
     if (!mounted) return;
 
@@ -176,9 +236,6 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
         _errorMessage = lastFailureMessage;
       }
     });
-
-    // Final disk hygiene pass
-    await cleaner.cleanTemporaryFiles();
   }
 
   @override
@@ -207,7 +264,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
               tooltip: 'Back',
               onPressed: _isUploading
                   ? null
-                  : () => Navigator.of(context).pop(),
+                  : () => Navigator.of(context).pop(_successCount > 0),
             ),
           ),
         ),
@@ -257,6 +314,22 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
                       ),
                     ),
                   ),
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: AppColors.errorDestructive,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ],
                   const Spacer(flex: 2),
                   PrivoraButton(
                     text: 'Open Gallery',
@@ -301,10 +374,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.file(
-                                File(file.path),
-                                fit: BoxFit.cover,
-                              ),
+                              child: Image.file(file, fit: BoxFit.cover),
                             ),
                             if (isFailed)
                               Container(
@@ -326,20 +396,46 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
                     ),
                   ),
 
-                  // Error Message
+                  // Stage-specific Error Message
                   if (_errorMessage != null) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(
-                          color: AppColors.errorDestructive,
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.errorDestructive.withValues(
+                          alpha: 0.1,
                         ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.errorDestructive.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: AppColors.errorDestructive,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(
+                                color: AppColors.errorDestructive,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
 
-                  // Progress Bar and Exact Requirement Format: "Uploading 3 of 8"
+                  // Progress Bar and Format: "Uploading X of Y"
                   if (_isUploading) ...[
                     LinearProgressIndicator(
                       value: _totalBatchCount > 0
@@ -459,7 +555,8 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
                           child: PrivoraButton(
                             text: 'Done',
                             variant: PrivoraButtonVariant.primary,
-                            onPressed: () => Navigator.of(context).pop(true),
+                            onPressed: () =>
+                                Navigator.of(context).pop(_successCount > 0),
                           ),
                         ),
                       ],

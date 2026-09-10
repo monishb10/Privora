@@ -10,6 +10,7 @@ import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/confirmation_dialog.dart';
+import '../gallery/import_photo_screen.dart';
 import 'widgets/pin_keyboard.dart';
 
 /// Everyday application unlock screen.
@@ -123,10 +124,29 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
       if (!mounted) return;
 
       if (isValid) {
-        ref.read(sessionLockServiceProvider.notifier).unlock();
+        final lockNotifier = ref.read(sessionLockServiceProvider.notifier);
+        lockNotifier.unlock();
         ref.read(categoryRepositoryProvider).clearCache(user?.id);
         ref.invalidate(categoriesProvider);
+
+        final pendingImport = user?.id != null
+            ? lockNotifier.getValidPendingImportForUser(user!.id)
+            : null;
+
         context.go('/categories');
+
+        if (pendingImport != null &&
+            pendingImport.tempFilePaths.isNotEmpty &&
+            mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ImportPhotoScreen(
+                categoryId: pendingImport.categoryId,
+                categoryName: pendingImport.categoryName,
+              ),
+            ),
+          );
+        }
       } else {
         HapticFeedback.heavyImpact();
         setState(() {
