@@ -90,16 +90,21 @@ class PrivoraBrandAppBar extends StatelessWidget
                       child: PrivoraLogo(size: 30, showShadow: false),
                     ),
 
-                    // Mathematically centred brand title
+                    // Mathematically centred brand title wordmark image
                     Center(
                       child: Padding(
                         // Symmetrical margins preserve perfect center while guarding actions and logo
-                        padding: const EdgeInsets.symmetric(horizontal: 96),
-                        child: Text(
-                          AppConstants.appName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.brandTitle,
+                        padding: const EdgeInsets.symmetric(horizontal: 104),
+                        child: Semantics(
+                          header: true,
+                          label: AppConstants.appName,
+                          child: Image.asset(
+                            'assets/branding/privora_wordmark.png',
+                            key: const Key('privora_brand_wordmark'),
+                            height: 26,
+                            fit: BoxFit.contain,
+                            color: AppColors.primaryText,
+                          ),
                         ),
                       ),
                     ),

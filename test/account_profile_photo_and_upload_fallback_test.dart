@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:privora/app/providers.dart';
-import 'package:privora/core/constants/app_constants.dart';
 import 'package:privora/core/errors/app_exception.dart';
 import 'package:privora/core/security/vault_crypto_service.dart';
 import 'package:privora/core/theme/app_theme.dart';
@@ -185,7 +184,9 @@ void main() {
       final logoPos = tester.getTopLeft(find.byType(PrivoraLogo));
       expect(logoPos.dx, equals(16.0));
 
-      final titleCenter = tester.getCenter(find.text(AppConstants.appName));
+      final titleCenter = tester.getCenter(
+        find.byKey(const Key('privora_brand_wordmark')),
+      );
       expect(titleCenter.dx, equals(200.0));
     });
   });
