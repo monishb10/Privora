@@ -180,15 +180,14 @@ void main() {
         final hasLocal = await secureKeyService.hasCompletedSetup(userId);
         expect(hasLocal, isTrue);
 
-        // Cloud must have PIN envelope
+        // Cloud must have recovery envelope and local secure storage must store recovery code
         final serverVault = await dbService.getVaultKeys(userId);
         expect(serverVault, isNotNull);
-        expect(serverVault!['pin_wrapped_key'], isNotNull);
-        expect(serverVault['pin_salt'], isNotNull);
-        expect(
-          serverVault['has_recovery_code'],
-          isFalse,
-        ); // Recovery is optional and not set yet
+        expect(serverVault!['recovery_wrapped_key'], isNotNull);
+        expect(serverVault['has_recovery_code'], isTrue);
+        final recoveryCode = await vaultRepository.getRecoveryCode(userId);
+        expect(recoveryCode, isNotNull);
+        expect(recoveryCode, isNotEmpty);
       },
     );
 
@@ -286,19 +285,30 @@ void main() {
       },
     );
 
-    test('Recovery codes are unique per user and optional', () async {
+    test('Recovery codes are unique per user and automatically generated', () async {
       const userA = 'user-rec-alice';
       const userB = 'user-rec-bob';
       const pin = '555666';
 
-      await vaultRepository.initializeNewVault(userId: userA, pin: pin);
-      await vaultRepository.initializeNewVault(userId: userB, pin: pin);
+      final initCodeA = await vaultRepository.initializeNewVault(
+        userId: userA,
+        pin: pin,
+      );
+      final initCodeB = await vaultRepository.initializeNewVault(
+        userId: userB,
+        pin: pin,
+      );
 
-      // Initially, recovery codes are not generated
-      expect(await vaultRepository.hasRecoveryCode(userA), isFalse);
-      expect(await vaultRepository.hasRecoveryCode(userB), isFalse);
+      // Recovery codes are generated and unique
+      expect(initCodeA, isNotEmpty);
+      expect(initCodeB, isNotEmpty);
+      expect(initCodeA, isNot(equals(initCodeB)));
+      expect(await vaultRepository.hasRecoveryCode(userA), isTrue);
+      expect(await vaultRepository.hasRecoveryCode(userB), isTrue);
+      expect(await vaultRepository.getRecoveryCode(userA), equals(initCodeA));
+      expect(await vaultRepository.getRecoveryCode(userB), equals(initCodeB));
 
-      // Generate recovery codes for both
+      // Can replace recovery codes for both
       final codeA = await vaultRepository.generateOrReplaceRecoveryCode(
         userId: userA,
         currentPin: pin,
@@ -311,9 +321,12 @@ void main() {
       expect(codeA, isNotEmpty);
       expect(codeB, isNotEmpty);
       expect(codeA, isNot(equals(codeB)));
+      expect(codeA, isNot(equals(initCodeA)));
 
       expect(await vaultRepository.hasRecoveryCode(userA), isTrue);
       expect(await vaultRepository.hasRecoveryCode(userB), isTrue);
+      expect(await vaultRepository.getRecoveryCode(userA), equals(codeA));
+      expect(await vaultRepository.getRecoveryCode(userB), equals(codeB));
     });
 
     test(

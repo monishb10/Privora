@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
@@ -23,6 +24,8 @@ class _SecuritySettingsScreenState
     extends ConsumerState<SecuritySettingsScreen> {
   bool _isLoadingRecoveryStatus = true;
   bool _hasRecoveryCode = false;
+  String? _currentRecoveryCode;
+  bool _isRecoveryCodeObscured = true;
   bool _isActionInProgress = false;
 
   @override
@@ -36,12 +39,13 @@ class _SecuritySettingsScreenState
         ref.read(currentUserProvider) ??
         SupabaseConfig.client?.auth.currentUser;
     if (user != null) {
-      final hasCode = await ref
-          .read(vaultRepositoryProvider)
-          .hasRecoveryCode(user.id);
+      final vaultRepo = ref.read(vaultRepositoryProvider);
+      final hasCode = await vaultRepo.hasRecoveryCode(user.id);
+      final code = await vaultRepo.getRecoveryCode(user.id);
       if (mounted) {
         setState(() {
-          _hasRecoveryCode = hasCode;
+          _hasRecoveryCode = hasCode || (code != null && code.isNotEmpty);
+          _currentRecoveryCode = code;
           _isLoadingRecoveryStatus = false;
         });
       }
@@ -147,6 +151,8 @@ class _SecuritySettingsScreenState
 
       setState(() {
         _hasRecoveryCode = true;
+        _currentRecoveryCode = recoveryCode;
+        _isRecoveryCodeObscured = true;
         _isActionInProgress = false;
       });
 
@@ -297,7 +303,7 @@ class _SecuritySettingsScreenState
               icon: Icons.vpn_key_rounded,
               title: 'Recovery Code',
               description: _hasRecoveryCode
-                  ? 'Your recovery code is active. You can replace it at any time by confirming your PIN.'
+                  ? 'Your unique recovery code is active. Use it strictly to change your PIN or recover your vault if you ever forget your PIN.'
                   : 'Optional backup code to regain vault access if you ever forget your PIN. Store it securely offline.',
               status: _isLoadingRecoveryStatus
                   ? 'Checking...'
@@ -307,39 +313,148 @@ class _SecuritySettingsScreenState
               statusColor: _hasRecoveryCode
                   ? AppColors.success
                   : AppColors.secondaryTextColor,
-              trailingAction: OutlinedButton.icon(
-                onPressed: _isActionInProgress
-                    ? null
-                    : _handleGenerateOrReplaceRecoveryCode,
-                icon: Icon(
-                  _hasRecoveryCode
-                      ? Icons.sync_rounded
-                      : Icons.add_moderator_rounded,
-                  size: 16,
-                  color: AppColors.primaryActionBlue,
-                ),
-                label: Text(
-                  _hasRecoveryCode
-                      ? 'Replace recovery code'
-                      : 'Generate recovery code',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.primaryActionBlue,
-                    fontWeight: FontWeight.w600,
+              trailingAction: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_currentRecoveryCode != null &&
+                      _currentRecoveryCode!.isNotEmpty) ...[
+                    Container(
+                      margin: const EdgeInsets.only(top: 4, bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.elevatedSurface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _isRecoveryCodeObscured
+                                  ? (_currentRecoveryCode!.startsWith('PRIV-')
+                                      ? 'PRIV-••••-••••-••••-••••'
+                                      : '••••-••••-••••-••••')
+                                  : _currentRecoveryCode!,
+                              style: AppTypography.labelMedium.copyWith(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              _isRecoveryCodeObscured
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              size: 18,
+                              color: AppColors.primaryActionBlue,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isRecoveryCodeObscured =
+                                    !_isRecoveryCodeObscured;
+                              });
+                            },
+                            tooltip: _isRecoveryCodeObscured ? 'Reveal' : 'Hide',
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.copy_rounded,
+                              size: 18,
+                              color: AppColors.primaryActionBlue,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            onPressed: () {
+                              Clipboard.setData(
+                                ClipboardData(text: _currentRecoveryCode!),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Recovery code copied to clipboard'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                            tooltip: 'Copy',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _isActionInProgress
+                            ? null
+                            : _handleGenerateOrReplaceRecoveryCode,
+                        icon: Icon(
+                          _hasRecoveryCode
+                              ? Icons.sync_rounded
+                              : Icons.add_moderator_rounded,
+                          size: 15,
+                          color: AppColors.primaryActionBlue,
+                        ),
+                        label: Text(
+                          _hasRecoveryCode
+                              ? 'Replace recovery code'
+                              : 'Generate recovery code',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.primaryActionBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          side: const BorderSide(
+                            color: AppColors.primaryActionBlue,
+                            width: 1.1,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => context.push('/recovery-code'),
+                        icon: const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 15,
+                          color: AppColors.primaryActionBlue,
+                        ),
+                        label: Text(
+                          'View full page',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.primaryActionBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  side: const BorderSide(
-                    color: AppColors.primaryActionBlue,
-                    width: 1.2,
-                  ),
-                ),
+                ],
               ),
             ),
 

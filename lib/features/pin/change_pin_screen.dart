@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
@@ -235,7 +236,24 @@ class _ChangePinScreenState extends ConsumerState<ChangePinScreen> {
                           onDigitPressed: _onDigitPressed,
                           onDeletePressed: _onDeletePressed,
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 12),
+                        if (_step == ChangePinStep.enterCurrent) ...[
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () => context.push('/recover-vault'),
+                            child: Text(
+                              'Forgot current PIN? Reset with recovery code',
+                              style: AppTypography.labelMedium.copyWith(
+                                color: AppColors.primaryAccent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ] else ...[
+                          const SizedBox(height: 24),
+                        ],
                       ],
                     ),
                   ),

@@ -342,10 +342,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       ),
                       const Divider(height: 1),
                       _buildOptionTile(
-                        icon: Icons.restore_page_outlined,
+                        icon: Icons.vpn_key_outlined,
                         title: 'Vault Recovery Code',
-                        subtitle: 'View recovery information',
-                        onTap: () => context.push('/recover-vault'),
+                        subtitle: 'View your unique recovery code',
+                        onTap: () => context.push('/recovery-code'),
                       ),
                     ],
                   ),

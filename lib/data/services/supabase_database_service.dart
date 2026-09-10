@@ -111,25 +111,6 @@ class SupabaseDatabaseService {
     int cryptoVersion = 1,
   }) async {
     try {
-      // First try upserting with has_recovery_code if migration 004 was applied
-      try {
-        await _client.from(StorageConstants.tableVaultKeys).upsert({
-          'user_id': userId,
-          'recovery_wrapped_key': recoveryWrappedKey,
-          'recovery_salt': recoverySalt,
-          'recovery_nonce': recoveryNonce,
-          'has_recovery_code': true,
-          'crypto_version': cryptoVersion,
-          'updated_at': DateTime.now().toIso8601String(),
-        });
-        return;
-      } catch (upsertErr) {
-        debugPrint(
-          'Upsert with has_recovery_code failed, falling back to base schema: $upsertErr',
-        );
-      }
-
-      // Fallback for standard 001_privora_schema.sql columns
       await _client.from(StorageConstants.tableVaultKeys).upsert({
         'user_id': userId,
         'recovery_wrapped_key': recoveryWrappedKey,

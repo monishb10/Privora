@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/widgets/privora_floating_nav_bar.dart';
 import '../data/models/vault_category.dart';
 import '../features/account/account_screen.dart';
+import '../features/account/recovery_code_screen.dart';
 import '../features/account/security_settings_screen.dart';
 import '../features/account/storage_usage_screen.dart';
 import '../features/auth/login_screen.dart';
@@ -119,6 +120,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/security-settings',
         builder: (context, state) => const SecuritySettingsScreen(),
+      ),
+      GoRoute(
+        path: '/recovery-code',
+        builder: (context, state) => const RecoveryCodeScreen(),
       ),
 
       // Bottom Navigation Shell for main screens

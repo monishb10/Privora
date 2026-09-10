@@ -145,6 +145,25 @@ class SecureKeyService {
     ]);
   }
 
+  Future<void> saveRecoveryCode(String userId, String code) async {
+    await _storage.write(
+      key: _key(StorageConstants.secureRecoveryCode, userId),
+      value: code,
+    );
+  }
+
+  Future<String?> getRecoveryCode(String userId) async {
+    return _storage.read(
+      key: _key(StorageConstants.secureRecoveryCode, userId),
+    );
+  }
+
+  Future<void> deleteRecoveryCode(String userId) async {
+    await _storage.delete(
+      key: _key(StorageConstants.secureRecoveryCode, userId),
+    );
+  }
+
   /// Deletes encrypted credentials and PIN verifier for a specific user ID
   Future<void> clearUserKeys(String userId) async {
     await Future.wait([
@@ -157,6 +176,7 @@ class SecureKeyService {
       _storage.delete(
         key: _key(StorageConstants.secureHasCompletedSetup, userId),
       ),
+      _storage.delete(key: _key(StorageConstants.secureRecoveryCode, userId)),
       _storage.delete(
         key: _key(StorageConstants.secureFailedPinAttempts, userId),
       ),

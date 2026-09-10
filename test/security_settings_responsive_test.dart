@@ -18,6 +18,11 @@ class MockVaultRepositoryForSecurityTest extends Fake
   }
 
   @override
+  Future<String?> getRecoveryCode(String userId) async {
+    return generatedRecoveryCode;
+  }
+
+  @override
   Future<String> generateOrReplaceRecoveryCode({
     required String userId,
     required String currentPin,

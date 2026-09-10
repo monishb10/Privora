@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/privora_logo.dart';
@@ -82,7 +83,7 @@ class _ConfirmPinScreenState extends ConsumerState<ConfirmPinScreen> {
       if (!mounted) return;
       setState(() {
         _hasError = true;
-        _errorMessage = e.toString();
+        _errorMessage = ErrorMapper.mapToUserMessage(e);
         _enteredPin = '';
         _isInitializing = false;
       });

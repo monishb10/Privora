@@ -128,6 +128,27 @@ class FakeDatabaseService extends SupabaseDatabaseService {
   }
 
   @override
+  Future<void> saveRecoveryEnvelope({
+    required String userId,
+    required String recoveryWrappedKey,
+    required String recoverySalt,
+    required String recoveryNonce,
+    int cryptoVersion = 1,
+  }) async {
+    final existing = vaults[userId] ?? {};
+    existing.addAll({
+      'user_id': userId,
+      'recovery_wrapped_key': recoveryWrappedKey,
+      'recovery_salt': recoverySalt,
+      'recovery_nonce': recoveryNonce,
+      'has_recovery_code': true,
+      'crypto_version': cryptoVersion,
+      'updated_at': DateTime.now().toIso8601String(),
+    });
+    vaults[userId] = existing;
+  }
+
+  @override
   Future<void> saveVaultPinEnvelope({
     required String userId,
     required String pinWrappedKey,
