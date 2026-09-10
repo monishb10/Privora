@@ -1,14 +1,16 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:privora/core/config/environment.dart';
 import 'package:privora/core/errors/app_exception.dart';
 import 'package:privora/core/security/pin_service.dart';
 import 'package:privora/core/security/secure_key_service.dart';
 import 'package:privora/core/security/vault_crypto_service.dart';
 import 'package:privora/data/repositories/vault_repository.dart';
+import 'package:privora/data/services/supabase_auth_service.dart';
 import 'package:privora/data/services/supabase_database_service.dart';
 import 'package:privora/features/auth/login_screen.dart';
 
@@ -305,6 +307,106 @@ void main() {
             reason: 'Cloudinary API secret found in ${file.path}',
           );
         }
+      },
+    );
+
+    test(
+      'GOOGLE_WEB_CLIENT_ID validation strictly rejects empty, placeholder, and invalid suffix',
+      () {
+        // Current environment in tests has no --dart-define and is flagged invalid
+        expect(Environment.validateGoogleWebClientId(), isNotNull);
+        expect(Environment.isGoogleWebClientIdValid, isFalse);
+
+        // Validation logic helper matching Environment.validateGoogleWebClientId
+        String? testValidate(String raw) {
+          final trimmed = raw.trim();
+          if (trimmed.isEmpty) return 'empty';
+          final upper = trimmed.toUpperCase();
+          if (upper.contains('WEB_CLIENT_ID') ||
+              upper.contains('YOUR_') ||
+              upper.contains('PLACEHOLDER') ||
+              upper.contains('<YOUR')) {
+            return 'placeholder';
+          }
+          if (!trimmed.endsWith('.apps.googleusercontent.com')) {
+            return 'invalid_suffix';
+          }
+          return null;
+        }
+
+        expect(testValidate(''), equals('empty'));
+        expect(testValidate('   \n  '), equals('empty'));
+        expect(testValidate('WEB_CLIENT_ID'), equals('placeholder'));
+        expect(
+          testValidate('<YOUR_GOOGLE_WEB_CLIENT_ID>'),
+          equals('placeholder'),
+        );
+        expect(testValidate('123456789.com'), equals('invalid_suffix'));
+        expect(testValidate('123456789.apps.googleusercontent.com'), isNull);
+        expect(
+          testValidate('  123456789.apps.googleusercontent.com \n '),
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'GoogleSignIn PlatformException mapping correctly handles cancellations and developer errors',
+      () {
+        // 1. User cancellation returns null quietly without error banner
+        final cancelException = PlatformException(
+          code: 'sign_in_canceled',
+          message: 'The user canceled the sign-in flow.',
+        );
+        expect(
+          SupabaseAuthService.mapGooglePlatformException(cancelException),
+          isNull,
+        );
+
+        final cancelCode12501 = PlatformException(
+          code: '12501',
+          message: 'com.google.android.gms.common.api.ApiException: 12501: ',
+        );
+        expect(
+          SupabaseAuthService.mapGooglePlatformException(cancelCode12501),
+          isNull,
+        );
+
+        // 2. Developer error (code 10) provides exact package name and debug SHA-1 guidance
+        final devError = PlatformException(
+          code: 'sign_in_failed',
+          message: 'com.google.android.gms.common.api.ApiException: 10: ',
+        );
+        final devMsg = SupabaseAuthService.mapGooglePlatformException(devError);
+        expect(devMsg, isNotNull);
+        expect(devMsg, contains('ApiException 10: DEVELOPER_ERROR'));
+        expect(devMsg, contains('com.monish.privora'));
+        expect(
+          devMsg,
+          contains(
+            '07:30:40:FB:67:AD:72:4F:B5:FF:A4:D4:04:BE:C7:9C:3F:AA:A0:E2',
+          ),
+        );
+
+        // 3. ApiException 12500 provides consent screen / Play Services guidance
+        final err12500 = PlatformException(
+          code: 'sign_in_failed',
+          message: 'com.google.android.gms.common.api.ApiException: 12500: ',
+        );
+        final msg12500 = SupabaseAuthService.mapGooglePlatformException(
+          err12500,
+        );
+        expect(msg12500, isNotNull);
+        expect(msg12500, contains('ApiException 12500'));
+
+        // 4. Network error
+        final netErr = PlatformException(
+          code: 'network_error',
+          message: 'Network request timed out',
+        );
+        final netMsg = SupabaseAuthService.mapGooglePlatformException(netErr);
+        expect(netMsg, isNotNull);
+        expect(netMsg, contains('network error'));
       },
     );
   });

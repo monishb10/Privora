@@ -9,12 +9,16 @@ import 'package:privora/features/categories/categories_screen.dart';
 import 'package:privora/features/categories/create_category_sheet.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class MockCategoryRepositoryForActionTest extends Fake implements CategoryRepository {
+class MockCategoryRepositoryForActionTest extends Fake
+    implements CategoryRepository {
   List<VaultCategory> categories = [];
   int createCategoryCallCount = 0;
 
   @override
-  Future<List<VaultCategory>> getCategories(String userId, {bool forceRefresh = false}) async {
+  Future<List<VaultCategory>> getCategories(
+    String userId, {
+    bool forceRefresh = false,
+  }) async {
     return categories;
   }
 
@@ -159,7 +163,10 @@ void main() {
         await tester.pumpAndSettle();
 
         // Enter category name
-        await tester.enterText(find.byType(TextFormField), 'Confidential Vault');
+        await tester.enterText(
+          find.byType(TextFormField),
+          'Confidential Vault',
+        );
         await tester.pump();
 
         // Find the 'Create Category' action button in sheet

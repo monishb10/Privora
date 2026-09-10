@@ -238,10 +238,7 @@ class _SecuritySettingsScreenState
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
-                          child: Text(
-                            title,
-                            style: AppTypography.titleMedium,
-                          ),
+                          child: Text(title, style: AppTypography.titleMedium),
                         ),
                         const SizedBox(width: 8),
                         badgeWidget,
@@ -304,7 +301,9 @@ class _SecuritySettingsScreenState
                   : 'Optional backup code to regain vault access if you ever forget your PIN. Store it securely offline.',
               status: _isLoadingRecoveryStatus
                   ? 'Checking...'
-                  : (_hasRecoveryCode ? 'Recovery code ready' : 'Not generated'),
+                  : (_hasRecoveryCode
+                        ? 'Recovery code ready'
+                        : 'Not generated'),
               statusColor: _hasRecoveryCode
                   ? AppColors.success
                   : AppColors.secondaryTextColor,

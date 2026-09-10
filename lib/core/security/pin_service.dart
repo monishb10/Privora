@@ -19,10 +19,7 @@ class PinService {
   // Active in-memory master key for current session. Never persisted unencrypted.
   Uint8List? _activeMasterKey;
 
-  PinService({
-    required this.secureKeyService,
-    required this.cryptoService,
-  });
+  PinService({required this.secureKeyService, required this.cryptoService});
 
   /// Returns true if an in-memory master key is available
   bool get hasActiveKey => _activeMasterKey != null;
@@ -69,14 +66,18 @@ class PinService {
     final effectiveUserId = _resolveUserId(userId);
 
     // Check lockout
-    final lockoutUntil = await _secureKeyService.getLockoutUntil(effectiveUserId);
+    final lockoutUntil = await _secureKeyService.getLockoutUntil(
+      effectiveUserId,
+    );
     if (lockoutUntil != null && DateTime.now().isBefore(lockoutUntil)) {
       final remaining = lockoutUntil.difference(DateTime.now()).inSeconds + 1;
       throw PinLockoutException(remaining);
     }
 
     final saltBase64 = await _secureKeyService.getPinSalt(effectiveUserId);
-    final verifierBase64 = await _secureKeyService.getPinVerifier(effectiveUserId);
+    final verifierBase64 = await _secureKeyService.getPinVerifier(
+      effectiveUserId,
+    );
     final wrappedKeyBase64 = await _secureKeyService.getWrappedMasterKey(
       effectiveUserId,
     );

@@ -120,132 +120,136 @@ class _RecoverVaultScreenState extends ConsumerState<RecoverVaultScreen> {
             ),
           ),
         ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const PrivoraLogo(size: 56),
-                const SizedBox(height: 20),
-                const Text('Vault Recovery', style: AppTypography.displayLarge),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter the 24-character recovery code generated when you first created your vault. This will unwrap your master key and allow you to set a new PIN.',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.secondaryText,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const PrivoraLogo(size: 56),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Vault Recovery',
+                    style: AppTypography.displayLarge,
                   ),
-                ),
-                const SizedBox(height: 28),
-
-                if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.danger.withValues(alpha: 0.4),
-                      ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enter the 24-character recovery code generated when you first created your vault. This will unwrap your master key and allow you to set a new PIN.',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.secondaryText,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline_rounded,
-                          color: AppColors.danger,
-                          size: 20,
+                  ),
+                  const SizedBox(height: 28),
+
+                  if (_errorMessage != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.danger.withValues(alpha: 0.4),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.danger,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            color: AppColors.danger,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.danger,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  TextFormField(
+                    controller: _codeController,
+                    textCapitalization: TextCapitalization.characters,
+                    style: AppTypography.bodyLarge.copyWith(
+                      letterSpacing: 1.2,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText:
+                          'Recovery Code (e.g. PRIV-XXXX-XXXX-XXXX-XXXX)',
+                      prefixIcon: Icon(
+                        Icons.vpn_key_outlined,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return 'Recovery code is required.';
+                      }
+                      if (val.trim().length < 16) {
+                        return 'Please enter a valid recovery code.';
+                      }
+                      return null;
+                    },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _newPinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    maxLength: 6,
+                    style: AppTypography.bodyLarge,
+                    decoration: const InputDecoration(
+                      labelText: 'New 6-Digit PIN',
+                      prefixIcon: Icon(
+                        Icons.pin_outlined,
+                        color: AppColors.secondaryText,
+                      ),
+                      counterText: '',
+                    ),
+                    validator: Validators.validatePin,
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _confirmPinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    maxLength: 6,
+                    style: AppTypography.bodyLarge,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm New 6-Digit PIN',
+                      prefixIcon: Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: AppColors.secondaryText,
+                      ),
+                      counterText: '',
+                    ),
+                    validator: Validators.validatePin,
+                  ),
+                  const SizedBox(height: 28),
+
+                  PrivoraButton(
+                    text: 'Restore Vault Access',
+                    isLoading: _isLoading,
+                    onPressed: _handleRecovery,
+                  ),
                 ],
-
-                TextFormField(
-                  controller: _codeController,
-                  textCapitalization: TextCapitalization.characters,
-                  style: AppTypography.bodyLarge.copyWith(
-                    letterSpacing: 1.2,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Recovery Code (e.g. PRIV-XXXX-XXXX-XXXX-XXXX)',
-                    prefixIcon: Icon(
-                      Icons.vpn_key_outlined,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty) {
-                      return 'Recovery code is required.';
-                    }
-                    if (val.trim().length < 16) {
-                      return 'Please enter a valid recovery code.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                TextFormField(
-                  controller: _newPinController,
-                  keyboardType: TextInputType.number,
-                  obscureText: true,
-                  maxLength: 6,
-                  style: AppTypography.bodyLarge,
-                  decoration: const InputDecoration(
-                    labelText: 'New 6-Digit PIN',
-                    prefixIcon: Icon(
-                      Icons.pin_outlined,
-                      color: AppColors.secondaryText,
-                    ),
-                    counterText: '',
-                  ),
-                  validator: Validators.validatePin,
-                ),
-                const SizedBox(height: 16),
-
-                TextFormField(
-                  controller: _confirmPinController,
-                  keyboardType: TextInputType.number,
-                  obscureText: true,
-                  maxLength: 6,
-                  style: AppTypography.bodyLarge,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm New 6-Digit PIN',
-                    prefixIcon: Icon(
-                      Icons.check_circle_outline_rounded,
-                      color: AppColors.secondaryText,
-                    ),
-                    counterText: '',
-                  ),
-                  validator: Validators.validatePin,
-                ),
-                const SizedBox(height: 28),
-
-                PrivoraButton(
-                  text: 'Restore Vault Access',
-                  isLoading: _isLoading,
-                  onPressed: _handleRecovery,
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

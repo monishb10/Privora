@@ -59,8 +59,9 @@ class VaultRepository {
       // 2. Read back locally saved PIN envelope
       final pinSalt = await secureKeyService.getPinSalt(userId);
       final pinVerifier = await secureKeyService.getPinVerifier(userId);
-      final wrappedMasterKey =
-          await secureKeyService.getWrappedMasterKey(userId);
+      final wrappedMasterKey = await secureKeyService.getWrappedMasterKey(
+        userId,
+      );
       final kekNonce = await secureKeyService.getKekNonce(userId);
 
       if (pinSalt == null ||
@@ -232,8 +233,9 @@ class VaultRepository {
       // Read back local PIN envelope
       final pinSalt = await secureKeyService.getPinSalt(userId);
       final pinVerifier = await secureKeyService.getPinVerifier(userId);
-      final wrappedMasterKey =
-          await secureKeyService.getWrappedMasterKey(userId);
+      final wrappedMasterKey = await secureKeyService.getWrappedMasterKey(
+        userId,
+      );
       final kekNonce = await secureKeyService.getKekNonce(userId);
 
       // Also persist updated PIN envelope to Supabase vault_keys

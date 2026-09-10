@@ -304,7 +304,8 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                         ),
                         const SizedBox(height: 8),
                         TextButton(
-                          onPressed: (_lockoutSecondsRemaining > 0 || _isVerifying)
+                          onPressed:
+                              (_lockoutSecondsRemaining > 0 || _isVerifying)
                               ? null
                               : () => context.push('/recover-vault'),
                           child: Text(

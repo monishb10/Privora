@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import 'app_exception.dart';
 
@@ -11,6 +12,28 @@ class ErrorMapper {
   static String mapToUserMessage(dynamic error) {
     if (error is AppException) {
       return error.message;
+    }
+
+    if (error is PlatformException) {
+      final code = error.code.toLowerCase();
+      final msg = (error.message ?? '').toLowerCase();
+      final details = error.details?.toString().toLowerCase() ?? '';
+      final combined = '$code $msg $details';
+
+      if (combined.contains('10') &&
+          (combined.contains('apiexception') ||
+              combined.contains('developer_error'))) {
+        return 'Google Sign-In configuration error (ApiException 10: DEVELOPER_ERROR). '
+            'Ensure package name "com.monish.privora" and debug SHA-1 '
+            '07:30:40:FB:67:AD:72:4F:B5:FF:A4:D4:04:BE:C7:9C:3F:AA:A0:E2 are registered in Google Cloud Console.';
+      }
+      if (combined.contains('12500')) {
+        return 'Google Sign-In failed (ApiException 12500). Verify OAuth consent screen and Google Play Services.';
+      }
+      if (combined.contains('network')) {
+        return 'Google Sign-In network error. Please check your internet connection.';
+      }
+      return 'Platform operation failed: ${error.message ?? error.code}';
     }
 
     if (error is TimeoutException) {

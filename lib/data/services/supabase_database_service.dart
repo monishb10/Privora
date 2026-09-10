@@ -146,7 +146,8 @@ class SupabaseDatabaseService {
       if (data == null) return false;
       final hasCode = data['has_recovery_code'] as bool? ?? false;
       final recoveryWrappedKey = data['recovery_wrapped_key'] as String?;
-      return hasCode || (recoveryWrappedKey != null && recoveryWrappedKey.isNotEmpty);
+      return hasCode ||
+          (recoveryWrappedKey != null && recoveryWrappedKey.isNotEmpty);
     } catch (e) {
       debugPrint('hasRecoveryCode error: $e');
       return false;

@@ -21,10 +21,40 @@ class Environment {
   );
 
   /// Google Web OAuth Client ID used as serverClientId for native Google Sign-In.
-  static const String googleWebClientId = String.fromEnvironment(
+  static const String _rawGoogleWebClientId = String.fromEnvironment(
     'GOOGLE_WEB_CLIENT_ID',
     defaultValue: '',
   );
+
+  /// Trimmed Google Web OAuth Client ID (whitespace and newlines removed)
+  static String get googleWebClientId => _rawGoogleWebClientId.trim();
+
+  /// Validates the GOOGLE_WEB_CLIENT_ID according to strict requirements:
+  /// - Reject empty value
+  /// - Reject placeholder text such as WEB_CLIENT_ID, YOUR_, etc.
+  /// - Require .apps.googleusercontent.com suffix
+  /// Returns an error message if invalid, or null if valid.
+  static String? validateGoogleWebClientId() {
+    final clientId = googleWebClientId;
+    if (clientId.isEmpty) {
+      return 'GOOGLE_WEB_CLIENT_ID is not configured. Supply your Web client ID via --dart-define=GOOGLE_WEB_CLIENT_ID=<id>.apps.googleusercontent.com';
+    }
+    final upper = clientId.toUpperCase();
+    if (upper.contains('WEB_CLIENT_ID') ||
+        upper.contains('YOUR_') ||
+        upper.contains('PLACEHOLDER') ||
+        upper.contains('<YOUR')) {
+      return 'GOOGLE_WEB_CLIENT_ID contains placeholder text. Replace with your actual Web application Client ID.';
+    }
+    if (!clientId.endsWith('.apps.googleusercontent.com')) {
+      return 'GOOGLE_WEB_CLIENT_ID must end in ".apps.googleusercontent.com". Ensure you are using the Web client ID, not the Android client ID.';
+    }
+    return null;
+  }
+
+  /// Whether GOOGLE_WEB_CLIENT_ID is present and formatted correctly
+  static bool get isGoogleWebClientIdValid =>
+      validateGoogleWebClientId() == null;
 
   /// Checks if Supabase is configured with valid non-placeholder values
   static bool get isConfigured {

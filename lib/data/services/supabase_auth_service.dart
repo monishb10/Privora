@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import '../../core/config/environment.dart';
@@ -8,7 +9,7 @@ import '../../core/errors/error_mapper.dart';
 
 /// Service managing Supabase authentication (Native Google Sign-In with IdToken, Email/Password).
 class SupabaseAuthService {
-  final GoogleSignIn _googleSignIn;
+  GoogleSignIn _googleSignIn;
   bool _isGoogleSignInRunning = false;
 
   SupabaseAuthService({GoogleSignIn? googleSignIn})
@@ -86,58 +87,204 @@ class SupabaseAuthService {
   /// Returns null if user cancelled the account selection.
   Future<sp.AuthResponse?> signInWithGoogle() async {
     if (_isGoogleSignInRunning) {
+      debugPrint(
+        '[Auth] Google Sign-In already in progress, ignoring duplicate tap.',
+      );
       return null;
+    }
+
+    // 1. Validate GOOGLE_WEB_CLIENT_ID before starting authentication flow
+    final validationError = Environment.validateGoogleWebClientId();
+    if (validationError != null) {
+      debugPrint('[Auth] Google Sign-In configuration error: $validationError');
+      throw AuthException(validationError);
     }
 
     _isGoogleSignInRunning = true;
     try {
-      // 1. Display native Android / iOS Google account chooser
-      final googleUser = await _googleSignIn.signIn().timeout(
-        const Duration(seconds: 45),
-        onTimeout: () {
-          throw const AuthException(
-            'Google Sign-In timed out. Please check your network and try again.',
-          );
-        },
+      final webClientId = Environment.googleWebClientId;
+      debugPrint(
+        '[Auth] Initiating Google Sign-In with serverClientId audience: $webClientId',
       );
 
-      // User cancelled account selection
-      if (googleUser == null) {
-        return null;
-      }
-
-      // 2. Obtain Google ID token
-      final googleAuth = await googleUser.authentication.timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw const AuthException(
-            'Obtaining Google credentials timed out. Please try again.',
-          );
-        },
-      );
-
-      final idToken = googleAuth.idToken;
-      if (idToken == null || idToken.isEmpty) {
-        throw const AuthException(
-          'Failed to retrieve Google authentication token. Please ensure Google Play Services is available.',
+      // Ensure GoogleSignIn has the correct serverClientId
+      if (_googleSignIn.serverClientId != webClientId) {
+        _googleSignIn = GoogleSignIn(
+          serverClientId: webClientId,
+          scopes: const ['email', 'profile', 'openid'],
         );
       }
 
-      // 3. Authenticate with Supabase using signInWithIdToken
-      final response = await _client.auth.signInWithIdToken(
-        provider: sp.OAuthProvider.google,
-        idToken: idToken,
-        accessToken: googleAuth.accessToken,
+      // 2. Display native Android / iOS Google account chooser
+      GoogleSignInAccount? googleUser;
+      try {
+        googleUser = await _googleSignIn.signIn().timeout(
+          const Duration(seconds: 45),
+          onTimeout: () {
+            throw const AuthException(
+              'Google Sign-In timed out. Please check your network and try again.',
+            );
+          },
+        );
+      } on PlatformException catch (pe) {
+        debugPrint(
+          '[Auth] GoogleSignIn.signIn PlatformException: '
+          'code="${pe.code}", message="${pe.message}", details="${pe.details}"',
+        );
+        final mapped = mapGooglePlatformException(pe);
+        if (mapped == null) {
+          // User intentionally cancelled account picker
+          debugPrint('[Auth] Google Sign-In cancelled by user.');
+          return null;
+        }
+        throw AuthException(mapped);
+      }
+
+      // User cancelled account selection
+      if (googleUser == null) {
+        debugPrint('[Auth] Google account selection cancelled by user.');
+        return null;
+      }
+
+      debugPrint('[Auth] Google account selected: ${googleUser.email}');
+
+      // 3. Obtain Google ID token and access token
+      GoogleSignInAuthentication googleAuth;
+      try {
+        googleAuth = await googleUser.authentication.timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            throw const AuthException(
+              'Obtaining Google credentials timed out. Please try again.',
+            );
+          },
+        );
+      } on PlatformException catch (pe) {
+        debugPrint(
+          '[Auth] googleUser.authentication PlatformException: '
+          'code="${pe.code}", message="${pe.message}", details="${pe.details}"',
+        );
+        final mapped = mapGooglePlatformException(pe);
+        if (mapped == null) return null;
+        throw AuthException(mapped);
+      }
+
+      final idToken = googleAuth.idToken;
+      final accessToken = googleAuth.accessToken;
+
+      if (idToken == null || idToken.isEmpty) {
+        debugPrint(
+          '[Auth] Google authentication succeeded but returned null/empty idToken. '
+          'serverClientId: $webClientId, '
+          'hasAccessToken: ${accessToken != null && accessToken.isNotEmpty}, '
+          'hasServerAuthCode: ${googleUser.serverAuthCode != null}',
+        );
+
+        throw const AuthException(
+          'Google authentication did not return an ID token. '
+          'Verify that GOOGLE_WEB_CLIENT_ID is your Google Web Application Client ID '
+          'and that your Android client (com.monish.privora with SHA-1 '
+          '07:30:40:FB:67:AD:72:4F:B5:FF:A4:D4:04:BE:C7:9C:3F:AA:A0:E2) '
+          'is registered in the same Google Cloud Console project.',
+        );
+      }
+
+      debugPrint(
+        '[Auth] ID token obtained successfully. Exchanging with Supabase...',
       );
 
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      debugPrint('Google Sign In error: $e');
+      // 4. Authenticate with Supabase using signInWithIdToken
+      try {
+        final response = await _client.auth.signInWithIdToken(
+          provider: sp.OAuthProvider.google,
+          idToken: idToken,
+          accessToken: accessToken,
+        );
+
+        debugPrint(
+          '[Auth] Supabase authentication successful. User ID: ${response.user?.id}',
+        );
+        return response;
+      } on sp.AuthException catch (sae) {
+        debugPrint(
+          '[Auth] Supabase signInWithIdToken AuthException: '
+          'message="${sae.message}", statusCode="${sae.statusCode}"',
+        );
+        final msg = sae.message.toLowerCase();
+        if (msg.contains('provider') &&
+            (msg.contains('disabled') || msg.contains('not enabled'))) {
+          throw const AuthException(
+            'Google provider is not enabled in your Supabase project. '
+            'Please enable Google in Supabase Dashboard -> Authentication -> Providers.',
+          );
+        }
+        if (msg.contains('unauthorized') ||
+            msg.contains('audience') ||
+            msg.contains('client id')) {
+          throw AuthException(
+            'Supabase rejected the Google ID token. In Supabase Dashboard -> Authentication -> Providers -> Google, '
+            'ensure Client ID is set to "$webClientId" and Authorized Client IDs contains both Web and Android Client IDs.',
+          );
+        }
+        throw AuthException('Supabase login failed: ${sae.message}');
+      }
+    } on AuthException {
+      rethrow;
+    } catch (e, stack) {
+      debugPrint('[Auth] Unexpected Google Sign In error: $e\n$stack');
       throw AuthException(ErrorMapper.mapToUserMessage(e));
     } finally {
       _isGoogleSignInRunning = false;
     }
+  }
+
+  /// Maps Google Sign-In PlatformExceptions to clear, actionable messages or null for user cancellation
+  @visibleForTesting
+  static String? mapGooglePlatformException(PlatformException pe) {
+    final code = pe.code.toLowerCase();
+    final message = (pe.message ?? '').toLowerCase();
+    final details = pe.details?.toString().toLowerCase() ?? '';
+    final combined = '$code $message $details';
+
+    // User cancellation - return null quietly
+    if (combined.contains('sign_in_canceled') ||
+        combined.contains('sign_in_cancelled') ||
+        combined.contains('canceled') ||
+        combined.contains('cancelled') ||
+        combined.contains('12501')) {
+      return null;
+    }
+
+    // ApiException 10: DEVELOPER_ERROR
+    if (combined.contains('10') &&
+        (combined.contains('apiexception') ||
+            combined.contains('developer_error') ||
+            combined.contains(': 10'))) {
+      return 'Google Sign-In configuration error (ApiException 10: DEVELOPER_ERROR). '
+          'Ensure package name "com.monish.privora" and debug SHA-1 '
+          '07:30:40:FB:67:AD:72:4F:B5:FF:A4:D4:04:BE:C7:9C:3F:AA:A0:E2 are registered '
+          'in Google Cloud Console under an Android OAuth 2.0 Client.';
+    }
+
+    // ApiException 12500: SIGN_IN_FAILED
+    if (combined.contains('12500')) {
+      return 'Google Sign-In failed (ApiException 12500). '
+          'Please verify that your Google Cloud OAuth consent screen is configured '
+          'and Google Play Services is up to date.';
+    }
+
+    // Network error
+    if (combined.contains('network_error') ||
+        combined.contains('7:') ||
+        combined.contains('network error')) {
+      return 'Google Sign-In network error. Please check your internet connection and retry.';
+    }
+
+    if (pe.message != null && pe.message!.trim().isNotEmpty) {
+      return 'Google Sign-In failed: ${pe.message}';
+    }
+
+    return 'Google Sign-In failed. Please try again.';
   }
 
   /// Send password reset email (preserved)

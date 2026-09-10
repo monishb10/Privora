@@ -69,8 +69,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go('/create-pin');
       } else {
         // User has an existing cloud vault -> Synchronize PIN envelope if needed
-        final hasLocalKeys =
-            await vaultRepo.syncServerPinEnvelopeIfMissing(user.id);
+        final hasLocalKeys = await vaultRepo.syncServerPinEnvelopeIfMissing(
+          user.id,
+        );
         if (!mounted) return;
         if (hasLocalKeys) {
           // Returning user on configured device -> Unlock with 6-digit PIN

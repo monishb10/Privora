@@ -29,31 +29,37 @@ class MockVaultRepository extends Fake implements VaultRepository {
 
 void main() {
   group('PIN Onboarding Without Recovery Gate Tests', () {
-    test('Validators.isSixDigitPin enforces strict 6-digit numeric string preserving leading zeros', () {
-      // Valid cases
-      expect(Validators.isSixDigitPin('000000'), isTrue);
-      expect(Validators.isSixDigitPin('012345'), isTrue);
-      expect(Validators.isSixDigitPin('123456'), isTrue);
-      expect(Validators.isSixDigitPin('999999'), isTrue);
+    test(
+      'Validators.isSixDigitPin enforces strict 6-digit numeric string preserving leading zeros',
+      () {
+        // Valid cases
+        expect(Validators.isSixDigitPin('000000'), isTrue);
+        expect(Validators.isSixDigitPin('012345'), isTrue);
+        expect(Validators.isSixDigitPin('123456'), isTrue);
+        expect(Validators.isSixDigitPin('999999'), isTrue);
 
-      // Invalid lengths
-      expect(Validators.isSixDigitPin(''), isFalse);
-      expect(Validators.isSixDigitPin('1'), isFalse);
-      expect(Validators.isSixDigitPin('12345'), isFalse);
-      expect(Validators.isSixDigitPin('1234567'), isFalse);
+        // Invalid lengths
+        expect(Validators.isSixDigitPin(''), isFalse);
+        expect(Validators.isSixDigitPin('1'), isFalse);
+        expect(Validators.isSixDigitPin('12345'), isFalse);
+        expect(Validators.isSixDigitPin('1234567'), isFalse);
 
-      // Invalid characters
-      expect(Validators.isSixDigitPin('12345a'), isFalse);
-      expect(Validators.isSixDigitPin('abcdef'), isFalse);
-      expect(Validators.isSixDigitPin('12 345'), isFalse);
-      expect(Validators.isSixDigitPin('12.345'), isFalse);
-      expect(Validators.isSixDigitPin('-12345'), isFalse);
+        // Invalid characters
+        expect(Validators.isSixDigitPin('12345a'), isFalse);
+        expect(Validators.isSixDigitPin('abcdef'), isFalse);
+        expect(Validators.isSixDigitPin('12 345'), isFalse);
+        expect(Validators.isSixDigitPin('12.345'), isFalse);
+        expect(Validators.isSixDigitPin('-12345'), isFalse);
 
-      // Validator message
-      expect(Validators.validatePin('000000'), isNull);
-      expect(Validators.validatePin('12345'), equals('PIN must be exactly 6 numeric digits.'));
-      expect(Validators.validatePin(null), equals('PIN is required.'));
-    });
+        // Validator message
+        expect(Validators.validatePin('000000'), isNull);
+        expect(
+          Validators.validatePin('12345'),
+          equals('PIN must be exactly 6 numeric digits.'),
+        );
+        expect(Validators.validatePin(null), equals('PIN is required.'));
+      },
+    );
 
     test('Typography hierarchy uses Manrope and prescribed styles', () {
       final textTheme = AppTheme.lightTheme.textTheme;
@@ -116,13 +122,13 @@ void main() {
           routes: [
             GoRoute(
               path: '/confirm-pin',
-              builder: (context, state) => const ConfirmPinScreen(originalPin: '012345'),
+              builder: (context, state) =>
+                  const ConfirmPinScreen(originalPin: '012345'),
             ),
             GoRoute(
               path: '/categories',
-              builder: (context, state) => const Scaffold(
-                body: Text('Categories Main Screen'),
-              ),
+              builder: (context, state) =>
+                  const Scaffold(body: Text('Categories Main Screen')),
             ),
           ],
           redirect: (context, state) {
@@ -148,7 +154,10 @@ void main() {
 
         // Verify Confirm PIN screen is showing
         expect(find.text('Confirm Your PIN'), findsOneWidget);
-        expect(find.text('Re-enter the 6-digit PIN to confirm.'), findsOneWidget);
+        expect(
+          find.text('Re-enter the 6-digit PIN to confirm.'),
+          findsOneWidget,
+        );
 
         // Enter 6 digits matching originalPin ('012345')
         await tester.tap(find.text('0'));
@@ -176,7 +185,10 @@ void main() {
         // STRICT VERIFICATION: Ensure no Recovery Code dialog was ever displayed
         expect(find.textContaining('Recovery Code'), findsNothing);
         expect(find.textContaining('Save this code'), findsNothing);
-        expect(find.textContaining('I have saved my recovery code'), findsNothing);
+        expect(
+          find.textContaining('I have saved my recovery code'),
+          findsNothing,
+        );
       },
     );
   });

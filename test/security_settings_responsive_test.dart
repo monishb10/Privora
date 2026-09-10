@@ -7,7 +7,8 @@ import 'package:privora/data/repositories/vault_repository.dart';
 import 'package:privora/features/account/security_settings_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class MockVaultRepositoryForSecurityTest extends Fake implements VaultRepository {
+class MockVaultRepositoryForSecurityTest extends Fake
+    implements VaultRepository {
   bool hasRecovery = false;
   String? generatedRecoveryCode;
 

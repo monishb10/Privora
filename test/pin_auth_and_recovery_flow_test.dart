@@ -68,7 +68,8 @@ class InMemorySecureStorage extends Fake implements FlutterSecureStorage {
   }
 }
 
-class InMemorySupabaseDatabaseService extends Fake implements SupabaseDatabaseService {
+class InMemorySupabaseDatabaseService extends Fake
+    implements SupabaseDatabaseService {
   final Map<String, Map<String, dynamic>> _vaults = {};
   bool shouldSimulateNetworkFailure = false;
 
@@ -145,7 +146,9 @@ void main() {
   setUp(() {
     storage = InMemorySecureStorage();
     secureKeyService = SecureKeyService(storage: storage);
-    cryptoService = VaultCryptoService(iterations: 1000); // Fast KDF for test runs
+    cryptoService = VaultCryptoService(
+      iterations: 1000,
+    ); // Fast KDF for test runs
     pinService = PinService(
       secureKeyService: secureKeyService,
       cryptoService: cryptoService,
@@ -160,96 +163,128 @@ void main() {
   });
 
   group('Requirement 4: Six-Digit PIN Login & Isolation Tests', () {
-    test('Fresh account sets up 6-digit PIN and verifies persistence in local storage and cloud envelope', () async {
-      const userId = 'user-fresh-1';
-      const pin = '012345'; // Preserves leading zero
+    test(
+      'Fresh account sets up 6-digit PIN and verifies persistence in local storage and cloud envelope',
+      () async {
+        const userId = 'user-fresh-1';
+        const pin = '012345'; // Preserves leading zero
 
-      await vaultRepository.initializeNewVault(userId: userId, pin: pin);
+        await vaultRepository.initializeNewVault(userId: userId, pin: pin);
 
-      expect(vaultRepository.hasActiveKey, isTrue);
-      final activeKey = vaultRepository.activeMasterKey;
-      expect(activeKey, isNotNull);
-      expect(activeKey!.length, equals(32));
+        expect(vaultRepository.hasActiveKey, isTrue);
+        final activeKey = vaultRepository.activeMasterKey;
+        expect(activeKey, isNotNull);
+        expect(activeKey!.length, equals(32));
 
-      // Local storage must have user-namespaced PIN setup completed
-      final hasLocal = await secureKeyService.hasCompletedSetup(userId);
-      expect(hasLocal, isTrue);
+        // Local storage must have user-namespaced PIN setup completed
+        final hasLocal = await secureKeyService.hasCompletedSetup(userId);
+        expect(hasLocal, isTrue);
 
-      // Cloud must have PIN envelope
-      final serverVault = await dbService.getVaultKeys(userId);
-      expect(serverVault, isNotNull);
-      expect(serverVault!['pin_wrapped_key'], isNotNull);
-      expect(serverVault['pin_salt'], isNotNull);
-      expect(serverVault['has_recovery_code'], isFalse); // Recovery is optional and not set yet
-    });
+        // Cloud must have PIN envelope
+        final serverVault = await dbService.getVaultKeys(userId);
+        expect(serverVault, isNotNull);
+        expect(serverVault!['pin_wrapped_key'], isNotNull);
+        expect(serverVault['pin_salt'], isNotNull);
+        expect(
+          serverVault['has_recovery_code'],
+          isFalse,
+        ); // Recovery is optional and not set yet
+      },
+    );
 
-    test('Correct PIN opens original vault after restart; Wrong PIN does not unlock', () async {
-      const userId = 'user-returning-1';
-      const pin = '987654';
+    test(
+      'Correct PIN opens original vault after restart; Wrong PIN does not unlock',
+      () async {
+        const userId = 'user-returning-1';
+        const pin = '987654';
 
-      await vaultRepository.initializeNewVault(userId: userId, pin: pin);
-      final originalMasterKey = Uint8List.fromList(vaultRepository.activeMasterKey!);
+        await vaultRepository.initializeNewVault(userId: userId, pin: pin);
+        final originalMasterKey = Uint8List.fromList(
+          vaultRepository.activeMasterKey!,
+        );
 
-      // Simulate app restart / session lock
-      vaultRepository.lockSession();
-      expect(vaultRepository.hasActiveKey, isFalse);
-      expect(vaultRepository.activeMasterKey, isNull);
+        // Simulate app restart / session lock
+        vaultRepository.lockSession();
+        expect(vaultRepository.hasActiveKey, isFalse);
+        expect(vaultRepository.activeMasterKey, isNull);
 
-      // Wrong PIN fails to unlock
-      final wrongResult = await vaultRepository.verifyAndUnlock('000000', userId: userId);
-      expect(wrongResult, isFalse);
-      expect(vaultRepository.hasActiveKey, isFalse);
+        // Wrong PIN fails to unlock
+        final wrongResult = await vaultRepository.verifyAndUnlock(
+          '000000',
+          userId: userId,
+        );
+        expect(wrongResult, isFalse);
+        expect(vaultRepository.hasActiveKey, isFalse);
 
-      // Correct PIN unlocks and recovers original master key
-      final correctResult = await vaultRepository.verifyAndUnlock(pin, userId: userId);
-      expect(correctResult, isTrue);
-      expect(vaultRepository.hasActiveKey, isTrue);
-      expect(vaultRepository.activeMasterKey, equals(originalMasterKey));
-    });
+        // Correct PIN unlocks and recovers original master key
+        final correctResult = await vaultRepository.verifyAndUnlock(
+          pin,
+          userId: userId,
+        );
+        expect(correctResult, isTrue);
+        expect(vaultRepository.hasActiveKey, isTrue);
+        expect(vaultRepository.activeMasterKey, equals(originalMasterKey));
+      },
+    );
 
-    test('Failed server vault lookup does not report that the PIN is absent', () async {
-      const userId = 'user-offline-1';
-      dbService.shouldSimulateNetworkFailure = true;
+    test(
+      'Failed server vault lookup does not report that the PIN is absent',
+      () async {
+        const userId = 'user-offline-1';
+        dbService.shouldSimulateNetworkFailure = true;
 
-      // When network fails, getServerVaultData throws an error rather than returning null
-      expect(
-        () => vaultRepository.getServerVaultData(userId),
-        throwsA(isA<CryptoException>()),
-      );
-    });
+        // When network fails, getServerVaultData throws an error rather than returning null
+        expect(
+          () => vaultRepository.getServerVaultData(userId),
+          throwsA(isA<CryptoException>()),
+        );
+      },
+    );
 
-    test('Different Google accounts have separate isolated PIN and recovery states', () async {
-      const userA = 'user-alice-123';
-      const userB = 'user-bob-456';
-      const pinA = '111222';
-      const pinB = '333444';
+    test(
+      'Different Google accounts have separate isolated PIN and recovery states',
+      () async {
+        const userA = 'user-alice-123';
+        const userB = 'user-bob-456';
+        const pinA = '111222';
+        const pinB = '333444';
 
-      // Setup User A
-      await vaultRepository.initializeNewVault(userId: userA, pin: pinA);
-      final keyA = Uint8List.fromList(vaultRepository.activeMasterKey!);
-      vaultRepository.lockSession();
+        // Setup User A
+        await vaultRepository.initializeNewVault(userId: userA, pin: pinA);
+        final keyA = Uint8List.fromList(vaultRepository.activeMasterKey!);
+        vaultRepository.lockSession();
 
-      // Setup User B
-      await vaultRepository.initializeNewVault(userId: userB, pin: pinB);
-      final keyB = Uint8List.fromList(vaultRepository.activeMasterKey!);
-      vaultRepository.lockSession();
+        // Setup User B
+        await vaultRepository.initializeNewVault(userId: userB, pin: pinB);
+        final keyB = Uint8List.fromList(vaultRepository.activeMasterKey!);
+        vaultRepository.lockSession();
 
-      // Master keys must be unique
-      expect(keyA, isNot(equals(keyB)));
+        // Master keys must be unique
+        expect(keyA, isNot(equals(keyB)));
 
-      // User A's PIN cannot unlock User B's vault
-      final unlockBwithA = await vaultRepository.verifyAndUnlock(pinA, userId: userB);
-      expect(unlockBwithA, isFalse);
+        // User A's PIN cannot unlock User B's vault
+        final unlockBwithA = await vaultRepository.verifyAndUnlock(
+          pinA,
+          userId: userB,
+        );
+        expect(unlockBwithA, isFalse);
 
-      // User B's PIN cannot unlock User A's vault
-      final unlockAwithB = await vaultRepository.verifyAndUnlock(pinB, userId: userA);
-      expect(unlockAwithB, isFalse);
+        // User B's PIN cannot unlock User A's vault
+        final unlockAwithB = await vaultRepository.verifyAndUnlock(
+          pinB,
+          userId: userA,
+        );
+        expect(unlockAwithB, isFalse);
 
-      // User A unlocks with PIN A and gets key A
-      final unlockA = await vaultRepository.verifyAndUnlock(pinA, userId: userA);
-      expect(unlockA, isTrue);
-      expect(vaultRepository.activeMasterKey, equals(keyA));
-    });
+        // User A unlocks with PIN A and gets key A
+        final unlockA = await vaultRepository.verifyAndUnlock(
+          pinA,
+          userId: userA,
+        );
+        expect(unlockA, isTrue);
+        expect(vaultRepository.activeMasterKey, equals(keyA));
+      },
+    );
 
     test('Recovery codes are unique per user and optional', () async {
       const userA = 'user-rec-alice';
@@ -264,8 +299,14 @@ void main() {
       expect(await vaultRepository.hasRecoveryCode(userB), isFalse);
 
       // Generate recovery codes for both
-      final codeA = await vaultRepository.generateOrReplaceRecoveryCode(userId: userA, currentPin: pin);
-      final codeB = await vaultRepository.generateOrReplaceRecoveryCode(userId: userB, currentPin: pin);
+      final codeA = await vaultRepository.generateOrReplaceRecoveryCode(
+        userId: userA,
+        currentPin: pin,
+      );
+      final codeB = await vaultRepository.generateOrReplaceRecoveryCode(
+        userId: userB,
+        currentPin: pin,
+      );
 
       expect(codeA, isNotEmpty);
       expect(codeB, isNotEmpty);
@@ -275,42 +316,57 @@ void main() {
       expect(await vaultRepository.hasRecoveryCode(userB), isTrue);
     });
 
-    test('Recovery code resets PIN while preserving the original master key', () async {
-      const userId = 'user-recover-pin';
-      const originalPin = '123456';
-      const newPin = '654321';
+    test(
+      'Recovery code resets PIN while preserving the original master key',
+      () async {
+        const userId = 'user-recover-pin';
+        const originalPin = '123456';
+        const newPin = '654321';
 
-      await vaultRepository.initializeNewVault(userId: userId, pin: originalPin);
-      final originalMasterKey = Uint8List.fromList(vaultRepository.activeMasterKey!);
+        await vaultRepository.initializeNewVault(
+          userId: userId,
+          pin: originalPin,
+        );
+        final originalMasterKey = Uint8List.fromList(
+          vaultRepository.activeMasterKey!,
+        );
 
-      // User generates recovery code
-      final recoveryCode = await vaultRepository.generateOrReplaceRecoveryCode(
-        userId: userId,
-        currentPin: originalPin,
-      );
+        // User generates recovery code
+        final recoveryCode = await vaultRepository
+            .generateOrReplaceRecoveryCode(
+              userId: userId,
+              currentPin: originalPin,
+            );
 
-      // User forgets PIN and session locks
-      vaultRepository.lockSession();
+        // User forgets PIN and session locks
+        vaultRepository.lockSession();
 
-      // Recovers vault with recovery code and sets new PIN
-      await vaultRepository.recoverVault(
-        userId: userId,
-        recoveryCode: recoveryCode,
-        newPin: newPin,
-      );
+        // Recovers vault with recovery code and sets new PIN
+        await vaultRepository.recoverVault(
+          userId: userId,
+          recoveryCode: recoveryCode,
+          newPin: newPin,
+        );
 
-      // Session locks again
-      vaultRepository.lockSession();
+        // Session locks again
+        vaultRepository.lockSession();
 
-      // Old PIN must fail
-      final oldUnlock = await vaultRepository.verifyAndUnlock(originalPin, userId: userId);
-      expect(oldUnlock, isFalse);
+        // Old PIN must fail
+        final oldUnlock = await vaultRepository.verifyAndUnlock(
+          originalPin,
+          userId: userId,
+        );
+        expect(oldUnlock, isFalse);
 
-      // New PIN must succeed and yield EXACT original master key (photos preserved!)
-      final newUnlock = await vaultRepository.verifyAndUnlock(newPin, userId: userId);
-      expect(newUnlock, isTrue);
-      expect(vaultRepository.activeMasterKey, equals(originalMasterKey));
-    });
+        // New PIN must succeed and yield EXACT original master key (photos preserved!)
+        final newUnlock = await vaultRepository.verifyAndUnlock(
+          newPin,
+          userId: userId,
+        );
+        expect(newUnlock, isTrue);
+        expect(vaultRepository.activeMasterKey, equals(originalMasterKey));
+      },
+    );
 
     test('Old recovery code fails after successful replacement', () async {
       const userId = 'user-replace-code';
