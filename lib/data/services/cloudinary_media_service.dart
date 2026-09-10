@@ -19,37 +19,87 @@ class CloudinaryUploadParams {
   final String fullSignature;
   final String thumbnailPublicId;
   final String thumbnailSignature;
+  final Map<String, String> fullSignedParams;
+  final Map<String, String> thumbnailSignedParams;
 
   const CloudinaryUploadParams({
     required this.cloudName,
     required this.apiKey,
     required this.timestamp,
     this.uploadPreset,
-    required this.resourceType,
-    required this.type,
+    this.resourceType = 'raw',
+    this.type = 'authenticated',
     required this.photoId,
     required this.fullPublicId,
     required this.fullSignature,
     required this.thumbnailPublicId,
     required this.thumbnailSignature,
+    this.fullSignedParams = const {},
+    this.thumbnailSignedParams = const {},
   });
 
   factory CloudinaryUploadParams.fromJson(Map<String, dynamic> json) {
-    final full = json['full'] as Map<String, dynamic>;
-    final thumb = json['thumbnail'] as Map<String, dynamic>;
+    final full = json['full'] as Map<String, dynamic>? ?? {};
+    final thumb = json['thumbnail'] as Map<String, dynamic>? ?? {};
+
+    final fullPublicId = full['publicId'] as String? ?? '';
+    final fullSignature = full['signature'] as String? ?? '';
+    final thumbPublicId = thumb['publicId'] as String? ?? '';
+    final thumbSignature = thumb['signature'] as String? ?? '';
+
+    final fullSigned = <String, String>{};
+    if (full['signedParams'] is Map) {
+      (full['signedParams'] as Map).forEach((k, v) {
+        fullSigned[k.toString()] = v.toString();
+      });
+    } else {
+      if (fullPublicId.isNotEmpty) fullSigned['public_id'] = fullPublicId;
+      if (json['timestamp'] != null) {
+        fullSigned['timestamp'] = json['timestamp'].toString();
+      }
+      if (json['uploadPreset'] != null &&
+          (json['uploadPreset'] as String).isNotEmpty) {
+        fullSigned['upload_preset'] = json['uploadPreset'] as String;
+      }
+    }
+
+    final thumbSigned = <String, String>{};
+    if (thumb['signedParams'] is Map) {
+      (thumb['signedParams'] as Map).forEach((k, v) {
+        thumbSigned[k.toString()] = v.toString();
+      });
+    } else {
+      if (thumbPublicId.isNotEmpty) thumbSigned['public_id'] = thumbPublicId;
+      if (json['timestamp'] != null) {
+        thumbSigned['timestamp'] = json['timestamp'].toString();
+      }
+      if (json['uploadPreset'] != null &&
+          (json['uploadPreset'] as String).isNotEmpty) {
+        thumbSigned['upload_preset'] = json['uploadPreset'] as String;
+      }
+    }
+
+    final timestampInt = json['timestamp'] is int
+        ? json['timestamp'] as int
+        : (int.tryParse(json['timestamp']?.toString() ?? '') ??
+              int.tryParse(fullSigned['timestamp'] ?? '') ??
+              DateTime.now().millisecondsSinceEpoch ~/ 1000);
 
     return CloudinaryUploadParams(
-      cloudName: json['cloudName'] as String,
-      apiKey: json['apiKey'] as String,
-      timestamp: json['timestamp'] as int,
-      uploadPreset: json['uploadPreset'] as String?,
+      cloudName: json['cloudName'] as String? ?? '',
+      apiKey: json['apiKey'] as String? ?? '',
+      timestamp: timestampInt,
+      uploadPreset:
+          json['uploadPreset'] as String? ?? fullSigned['upload_preset'],
       resourceType: json['resourceType'] as String? ?? 'raw',
       type: json['type'] as String? ?? 'authenticated',
-      photoId: json['photoId'] as String,
-      fullPublicId: full['publicId'] as String,
-      fullSignature: full['signature'] as String,
-      thumbnailPublicId: thumb['publicId'] as String,
-      thumbnailSignature: thumb['signature'] as String,
+      photoId: json['photoId'] as String? ?? '',
+      fullPublicId: fullPublicId,
+      fullSignature: fullSignature,
+      thumbnailPublicId: thumbPublicId,
+      thumbnailSignature: thumbSignature,
+      fullSignedParams: fullSigned,
+      thumbnailSignedParams: thumbSigned,
     );
   }
 }
@@ -124,7 +174,84 @@ class CloudinaryMediaService {
     }
   }
 
+  /// Parses and sanitizes Cloudinary error response without leaking sensitive
+  /// tokens, API secrets, signature hashes, or ciphertext bytes.
+  static String parseCloudinaryErrorMessage({
+    required int statusCode,
+    required String responseBody,
+    Map<String, String>? headers,
+  }) {
+    String? rawError;
+
+    // 1. Check X-Cld-Error header (case-insensitive header lookup)
+    if (headers != null) {
+      for (final entry in headers.entries) {
+        if (entry.key.toLowerCase() == 'x-cld-error') {
+          rawError = entry.value;
+          break;
+        }
+      }
+    }
+
+    // 2. Read JSON error.message
+    if (responseBody.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(responseBody);
+        if (decoded is Map) {
+          if (decoded['error'] is Map && decoded['error']['message'] != null) {
+            rawError = decoded['error']['message'].toString();
+          } else if (decoded['message'] != null) {
+            rawError = decoded['message'].toString();
+          }
+        }
+      } catch (_) {
+        // Body was not JSON
+      }
+    }
+
+    return sanitizeCloudinaryError(rawError, statusCode);
+  }
+
+  /// Sanitizes raw error text, stripping sensitive secrets, signatures, and tokens.
+  static String sanitizeCloudinaryError(String? rawError, int statusCode) {
+    if (rawError == null || rawError.trim().isEmpty) {
+      return 'Cloudinary request failed with HTTP $statusCode';
+    }
+
+    var sanitized = rawError
+        // Redact hex signatures (32-char md5, 40-char sha1, or 64-char sha256)
+        .replaceAll(RegExp(r'\b[a-fA-F0-9]{32,64}\b'), '[REDACTED_SIGNATURE]')
+        // Redact string to sign (e.g. "String to sign - '...'" or "String to sign: ...")
+        .replaceAll(
+          RegExp(r'String to sign\s*[-:=]?\s*.*', caseSensitive: false),
+          'String to sign: [REDACTED]',
+        )
+        // Redact api_secret
+        .replaceAll(
+          RegExp(r'api_secret\s*[:=]\s*[^\s,]+', caseSensitive: false),
+          'api_secret=[REDACTED]',
+        )
+        // Redact api_key
+        .replaceAll(
+          RegExp(r'api_key\s*[:=]\s*[^\s,]+', caseSensitive: false),
+          'api_key=[REDACTED]',
+        )
+        // Redact bearer tokens
+        .replaceAll(
+          RegExp(r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', caseSensitive: false),
+          'Bearer [REDACTED]',
+        );
+
+    sanitized = sanitized.trim();
+    if (sanitized.isEmpty) {
+      return 'Cloudinary request failed with HTTP $statusCode';
+    }
+    return sanitized;
+  }
+
   /// Uploads encrypted ciphertext bytes directly to Cloudinary using multipart/form-data.
+  /// Uses REST endpoint: https://api.cloudinary.com/v1_1/{cloud_name}/raw/authenticated
+  /// Neither resource_type nor type are sent in multipart fields.
   Future<CloudinaryUploadResult> uploadEncryptedBytes({
     required String cloudName,
     required String apiKey,
@@ -134,20 +261,30 @@ class CloudinaryMediaService {
     required String signature,
     required Uint8List bytes,
     required String filename,
+    Map<String, String>? signedParams,
+    String stage = 'upload',
   }) async {
     try {
       final uri = Uri.parse(
-        'https://api.cloudinary.com/v1_1/$cloudName/raw/upload',
+        'https://api.cloudinary.com/v1_1/$cloudName/raw/authenticated',
       );
       final request = http.MultipartRequest('POST', uri);
 
+      // Multipart request contains ONLY: file, api_key, signature, and every exact entry in signedParams
       request.fields['api_key'] = apiKey;
-      request.fields['timestamp'] = timestamp.toString();
-      request.fields['public_id'] = publicId;
-      request.fields['type'] = 'authenticated';
       request.fields['signature'] = signature;
-      if (uploadPreset != null && uploadPreset.isNotEmpty) {
-        request.fields['upload_preset'] = uploadPreset;
+
+      final effectiveSignedParams =
+          signedParams ??
+          {
+            'public_id': publicId,
+            'timestamp': timestamp.toString(),
+            if (uploadPreset != null && uploadPreset.isNotEmpty)
+              'upload_preset': uploadPreset,
+          };
+
+      for (final entry in effectiveSignedParams.entries) {
+        request.fields[entry.key] = entry.value;
       }
 
       request.files.add(
@@ -161,11 +298,20 @@ class CloudinaryMediaService {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        debugPrint(
-          'Cloudinary upload failed (${response.statusCode}): ${response.body}',
+        final safeError = parseCloudinaryErrorMessage(
+          statusCode: response.statusCode,
+          responseBody: response.body,
+          headers: response.headers,
         );
+
+        if (kDebugMode) {
+          debugPrint(
+            '[CloudinaryMediaService] Upload failed ($stage) HTTP ${response.statusCode}: $safeError',
+          );
+        }
+
         throw StorageException(
-          'Cloudinary upload failed with status ${response.statusCode}.',
+          'Cloudinary upload failed (HTTP ${response.statusCode}): $safeError',
         );
       }
 
@@ -177,7 +323,11 @@ class CloudinaryMediaService {
         bytes: (responseBody['bytes'] as int?) ?? bytes.length,
       );
     } catch (e) {
-      debugPrint('uploadEncryptedBytes error: $e');
+      if (kDebugMode) {
+        debugPrint(
+          '[CloudinaryMediaService] uploadEncryptedBytes error ($stage): $e',
+        );
+      }
       if (e is AppException) rethrow;
       throw StorageException(ErrorMapper.mapToUserMessage(e));
     }

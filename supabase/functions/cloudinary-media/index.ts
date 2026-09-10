@@ -36,17 +36,24 @@ serve(async (req: Request) => {
 
   try {
     // 1. Verify Cloudinary and Supabase configuration secrets
-    const cloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME");
-    const apiKey = Deno.env.get("CLOUDINARY_API_KEY");
-    const apiSecret = Deno.env.get("CLOUDINARY_API_SECRET");
-    const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET") || "privora_signed";
+    const cloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME")?.trim();
+    const apiKey = Deno.env.get("CLOUDINARY_API_KEY")?.trim();
+    const apiSecret = Deno.env.get("CLOUDINARY_API_SECRET")?.trim();
+    const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET")?.trim() || "privora_signed";
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!cloudName || !apiKey || !apiSecret || !supabaseUrl || !supabaseServiceKey) {
+    if (!cloudName || !apiKey || !apiSecret || !uploadPreset || !supabaseUrl || !supabaseServiceKey) {
+      const missing: string[] = [];
+      if (!cloudName) missing.push("CLOUDINARY_CLOUD_NAME");
+      if (!apiKey) missing.push("CLOUDINARY_API_KEY");
+      if (!apiSecret) missing.push("CLOUDINARY_API_SECRET");
+      if (!uploadPreset) missing.push("CLOUDINARY_UPLOAD_PRESET");
+      if (!supabaseUrl) missing.push("SUPABASE_URL");
+      if (!supabaseServiceKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
       return new Response(
         JSON.stringify({
-          error: "Cloudinary or Supabase server configuration missing.",
+          error: `Cloudinary or Supabase server configuration missing: ${missing.join(", ")}`,
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -154,29 +161,27 @@ serve(async (req: Request) => {
       const fullPublicId = `privora/${userId}/${categoryId}/${photoId}`;
       const thumbPublicId = `privora/${userId}/${categoryId}/${photoId}_thumb`;
 
-      const timestamp = Math.floor(Date.now() / 1000);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
 
-      // Sign parameters for full photo upload: public_id, timestamp, type=authenticated
-      const fullSignParams: Record<string, string | number> = {
+      // Canonical Map<string, string> containing every parameter being signed for full asset
+      const fullSignedParams: Record<string, string> = {
         public_id: fullPublicId,
         timestamp: timestamp,
-        type: "authenticated",
       };
-      if (uploadPreset) {
-        fullSignParams["upload_preset"] = uploadPreset;
+      if (uploadPreset && uploadPreset.length > 0) {
+        fullSignedParams["upload_preset"] = uploadPreset;
       }
-      const fullSignature = await signCloudinaryParams(fullSignParams, apiSecret);
+      const fullSignature = await signCloudinaryParams(fullSignedParams, apiSecret);
 
-      // Sign parameters for thumbnail upload
-      const thumbSignParams: Record<string, string | number> = {
+      // Canonical Map<string, string> containing every parameter being signed for thumbnail
+      const thumbSignedParams: Record<string, string> = {
         public_id: thumbPublicId,
         timestamp: timestamp,
-        type: "authenticated",
       };
-      if (uploadPreset) {
-        thumbSignParams["upload_preset"] = uploadPreset;
+      if (uploadPreset && uploadPreset.length > 0) {
+        thumbSignedParams["upload_preset"] = uploadPreset;
       }
-      const thumbSignature = await signCloudinaryParams(thumbSignParams, apiSecret);
+      const thumbSignature = await signCloudinaryParams(thumbSignedParams, apiSecret);
 
       // Track pending upload in server-controlled database table
       await dbClient.from("pending_uploads").upsert(
@@ -196,18 +201,18 @@ serve(async (req: Request) => {
         JSON.stringify({
           cloudName,
           apiKey,
-          timestamp,
+          timestamp: parseInt(timestamp, 10),
           uploadPreset: uploadPreset || null,
-          resourceType: "raw",
-          type: "authenticated",
           photoId,
           full: {
             publicId: fullPublicId,
             signature: fullSignature,
+            signedParams: fullSignedParams,
           },
           thumbnail: {
             publicId: thumbPublicId,
             signature: thumbSignature,
+            signedParams: thumbSignedParams,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

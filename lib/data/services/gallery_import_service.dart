@@ -30,9 +30,9 @@ class GalleryImportService {
     ImagePicker? picker,
     Uuid? uuid,
     Future<Directory> Function()? tempDirProvider,
-  })  : _picker = picker ?? ImagePicker(),
-        _uuid = uuid ?? const Uuid(),
-        _tempDirProvider = tempDirProvider ?? _defaultTempDir;
+  }) : _picker = picker ?? ImagePicker(),
+       _uuid = uuid ?? const Uuid(),
+       _tempDirProvider = tempDirProvider ?? _defaultTempDir;
 
   static Future<Directory> _defaultTempDir() async {
     try {

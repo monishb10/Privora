@@ -100,6 +100,8 @@ class FakeTestCloudinaryService extends Fake implements CloudinaryMediaService {
     required String signature,
     required Uint8List bytes,
     required String filename,
+    Map<String, String>? signedParams,
+    String stage = 'upload',
   }) async {
     uploadBytesCalls++;
     if (failOnFullUpload && publicId.startsWith('full-')) {

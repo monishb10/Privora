@@ -134,6 +134,16 @@ class PhotoUploadService {
         // 5. Stage 11: Upload encrypted thumbnail as raw authenticated asset
         currentStage = ImportStage.thumbnailUploaded;
         update(UploadStatus.uploadingThumbnail, 0.65);
+        final thumbSignedParams = params.thumbnailSignedParams.isNotEmpty
+            ? params.thumbnailSignedParams
+            : {
+                'public_id': params.thumbnailPublicId,
+                'timestamp': params.timestamp.toString(),
+                if (params.uploadPreset != null &&
+                    params.uploadPreset!.isNotEmpty)
+                  'upload_preset': params.uploadPreset!,
+              };
+
         await cService.uploadEncryptedBytes(
           cloudName: params.cloudName,
           apiKey: params.apiKey,
@@ -141,8 +151,10 @@ class PhotoUploadService {
           uploadPreset: params.uploadPreset,
           publicId: params.thumbnailPublicId,
           signature: params.thumbnailSignature,
+          signedParams: thumbSignedParams,
           bytes: encryptedThumb,
           filename: '${photoId}_thumb.enc',
+          stage: 'thumbnail',
         );
         thumbUploaded = true;
         ImportPipelineLogger.logStage(
@@ -153,6 +165,16 @@ class PhotoUploadService {
         // 6. Stage 10: Upload encrypted full photo as raw authenticated asset
         currentStage = ImportStage.fullAssetUploaded;
         update(UploadStatus.uploadingFullPhoto, 0.8);
+        final fullSignedParams = params.fullSignedParams.isNotEmpty
+            ? params.fullSignedParams
+            : {
+                'public_id': params.fullPublicId,
+                'timestamp': params.timestamp.toString(),
+                if (params.uploadPreset != null &&
+                    params.uploadPreset!.isNotEmpty)
+                  'upload_preset': params.uploadPreset!,
+              };
+
         final fullResult = await cService.uploadEncryptedBytes(
           cloudName: params.cloudName,
           apiKey: params.apiKey,
@@ -160,8 +182,10 @@ class PhotoUploadService {
           uploadPreset: params.uploadPreset,
           publicId: params.fullPublicId,
           signature: params.fullSignature,
+          signedParams: fullSignedParams,
           bytes: encryptedFull,
           filename: '$photoId.enc',
+          stage: 'full_photo',
         );
         photoUploaded = true;
         ImportPipelineLogger.logStage(

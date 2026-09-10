@@ -68,6 +68,8 @@ class FakeCloudinaryMediaService extends Fake
     );
   }
 
+  final Map<String, Map<String, String>> uploadedSignedParams = {};
+
   @override
   Future<CloudinaryUploadResult> uploadEncryptedBytes({
     required String cloudName,
@@ -78,8 +80,13 @@ class FakeCloudinaryMediaService extends Fake
     required String signature,
     required Uint8List bytes,
     required String filename,
+    Map<String, String>? signedParams,
+    String stage = 'upload',
   }) async {
     uploadBytesCalls++;
+    if (signedParams != null) {
+      uploadedSignedParams[publicId] = signedParams;
+    }
     if (simulatedDelay > Duration.zero) await Future.delayed(simulatedDelay);
     if (failOnlyOnFullPhoto && !publicId.endsWith('_thumb')) {
       throw const StorageException(
