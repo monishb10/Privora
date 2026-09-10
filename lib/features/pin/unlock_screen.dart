@@ -124,6 +124,8 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
 
       if (isValid) {
         ref.read(sessionLockServiceProvider.notifier).unlock();
+        ref.read(categoryRepositoryProvider).clearCache(user?.id);
+        ref.invalidate(categoriesProvider);
         context.go('/categories');
       } else {
         HapticFeedback.heavyImpact();
@@ -164,6 +166,7 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
     );
     if (confirmed == true && mounted) {
       await ref.read(authRepositoryProvider).signOut();
+      ref.read(categoryRepositoryProvider).clearCache();
       ref.invalidate(currentUserProvider);
       ref.invalidate(categoriesProvider);
       ref.invalidate(recentlyDeletedPhotosProvider);

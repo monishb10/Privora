@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
@@ -67,7 +68,9 @@ class _ConfirmPinScreenState extends ConsumerState<ConfirmPinScreen> {
     });
 
     try {
-      final user = ref.read(currentUserProvider);
+      final user =
+          ref.read(currentUserProvider) ??
+          SupabaseConfig.client?.auth.currentUser;
       if (user == null) {
         throw Exception('User session not found.');
       }
@@ -76,6 +79,10 @@ class _ConfirmPinScreenState extends ConsumerState<ConfirmPinScreen> {
       await vaultRepo.initializeNewVault(userId: user.id, pin: _enteredPin);
 
       ref.read(sessionLockServiceProvider.notifier).unlock();
+
+      // Reset category cache and invalidate category provider for fresh account
+      ref.read(categoryRepositoryProvider).clearCache(user.id);
+      ref.invalidate(categoriesProvider);
 
       if (!mounted) return;
       context.go('/categories');

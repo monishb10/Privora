@@ -93,6 +93,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
     lockService: ref.watch(sessionLockServiceProvider.notifier),
     pinService: ref.watch(pinServiceProvider),
     temporaryFileCleaner: ref.watch(temporaryFileCleanerProvider),
+    categoryRepository: ref.watch(categoryRepositoryProvider),
   );
 });
 

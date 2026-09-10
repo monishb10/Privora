@@ -10,6 +10,7 @@ class CategoryRepository {
   final SupabaseDatabaseService databaseService;
   final Uuid uuid;
 
+  String? _cachedUserId;
   List<VaultCategory>? _cachedCategories;
 
   CategoryRepository({required this.databaseService, Uuid? uuid})
@@ -21,19 +22,24 @@ class CategoryRepository {
     String userId, {
     bool forceRefresh = false,
   }) async {
-    if (_cachedCategories != null && !forceRefresh) {
-      return _cachedCategories!;
-    }
     final effectiveUserId =
         SupabaseConfig.client?.auth.currentUser?.id ?? userId;
+    if (_cachedUserId == effectiveUserId &&
+        _cachedCategories != null &&
+        !forceRefresh) {
+      return _cachedCategories!;
+    }
     final categories = await databaseService
         .getCategories(effectiveUserId)
         .timeout(const Duration(seconds: 10));
+    _cachedUserId = effectiveUserId;
     _cachedCategories = categories;
     return categories;
   }
 
   void addCategoryLocally(VaultCategory category) {
+    if (_cachedUserId != null && _cachedUserId != category.userId) return;
+    _cachedUserId = category.userId;
     final current = _cachedCategories ?? [];
     if (!current.any((c) => c.id == category.id)) {
       _cachedCategories = [category, ...current];
@@ -42,6 +48,7 @@ class CategoryRepository {
 
   void updateCategoryLocally(VaultCategory category) {
     if (_cachedCategories == null) return;
+    if (_cachedUserId != null && _cachedUserId != category.userId) return;
     _cachedCategories = _cachedCategories!
         .map((c) => c.id == category.id ? category : c)
         .toList();
@@ -54,8 +61,11 @@ class CategoryRepository {
         .toList();
   }
 
-  void clearCache() {
-    _cachedCategories = null;
+  void clearCache([String? userId]) {
+    if (userId == null || _cachedUserId == userId) {
+      _cachedUserId = null;
+      _cachedCategories = null;
+    }
   }
 
   Future<VaultCategory> createCategory({

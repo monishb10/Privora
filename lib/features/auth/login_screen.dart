@@ -60,8 +60,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // Check local and server vault status for this user
       final vaultRepo = ref.read(vaultRepositoryProvider);
-      final hasLocalKeys = await vaultRepo.hasCompletedSetup(user.id);
+      // Clear previous in-memory caches and invalidate providers for this account
+      ref.read(categoryRepositoryProvider).clearCache(user.id);
+      ref.invalidate(categoriesProvider);
+      ref.invalidate(storageUsageProvider);
+      ref.invalidate(recentlyDeletedPhotosProvider);
 
+      final hasLocalKeys = await vaultRepo.hasCompletedSetup(user.id);
       if (!mounted) return;
 
       if (hasLocalKeys) {

@@ -115,6 +115,15 @@ class SupabaseAuthService {
         );
       }
 
+      // Clear previous local Google account session so Google Play Services
+      // always presents the native account selection sheet, allowing the user
+      // to pick any Google account on the device or add another account.
+      try {
+        await _googleSignIn.signOut();
+      } catch (e) {
+        debugPrint('[Auth] GoogleSignIn pre-sign-in signOut note: $e');
+      }
+
       // 2. Display native Android / iOS Google account chooser
       GoogleSignInAccount? googleUser;
       try {
@@ -301,17 +310,10 @@ class SupabaseAuthService {
   }
 
   /// Signs out of Google and Supabase independently with bounded waits.
-  /// Uses disconnect() so the next login allows account selection rather than
-  /// silently reusing the previous account.
   Future<void> signOut() async {
     // 1. Sign out of Google independently with bounded wait
     try {
       await _googleSignIn.signOut().timeout(const Duration(seconds: 5));
-      try {
-        await _googleSignIn.disconnect().timeout(const Duration(seconds: 5));
-      } catch (discErr) {
-        debugPrint('Google disconnect note: $discErr');
-      }
     } catch (e) {
       debugPrint('Google signOut warning: $e');
     }

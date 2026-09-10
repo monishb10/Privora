@@ -37,6 +37,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 
     if (confirmed == true && mounted) {
       await ref.read(authRepositoryProvider).signOut();
+      ref.read(categoryRepositoryProvider).clearCache();
       ref.invalidate(currentUserProvider);
       ref.invalidate(categoriesProvider);
       ref.invalidate(recentlyDeletedPhotosProvider);

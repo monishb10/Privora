@@ -8,6 +8,7 @@ import '../../core/security/temporary_file_cleaner.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_database_service.dart';
 import '../services/supabase_storage_service.dart';
+import 'category_repository.dart';
 
 /// Repository coordinating authentication, account deletion, and session cleanup.
 class AuthRepository {
@@ -18,6 +19,7 @@ class AuthRepository {
   final SessionLockNotifier lockService;
   final PinService pinService;
   final TemporaryFileCleaner temporaryFileCleaner;
+  final CategoryRepository? categoryRepository;
 
   AuthRepository({
     required this.authService,
@@ -27,6 +29,7 @@ class AuthRepository {
     required this.lockService,
     required this.pinService,
     required this.temporaryFileCleaner,
+    this.categoryRepository,
   });
 
   sp.User? get currentUser => authService.currentUser;
@@ -81,7 +84,10 @@ class AuthRepository {
       debugPrint('Error cleaning temporary files on signOut: $e');
     }
 
-    // 4. Sign out of Google and Supabase
+    // 4. Clear cached categories to prevent cross-account leakage
+    categoryRepository?.clearCache();
+
+    // 5. Sign out of Google and Supabase
     await authService.signOut();
   }
 
@@ -111,7 +117,10 @@ class AuthRepository {
       pinService.lockSession();
       lockService.resetToLocked();
 
-      // 6. Sign out of Google and Supabase
+      // 6. Clear category cache
+      categoryRepository?.clearCache();
+
+      // 7. Sign out of Google and Supabase
       await authService.signOut();
     } catch (e) {
       debugPrint('Account deletion warning: $e');
