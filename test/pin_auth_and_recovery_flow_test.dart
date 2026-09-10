@@ -285,49 +285,52 @@ void main() {
       },
     );
 
-    test('Recovery codes are unique per user and automatically generated', () async {
-      const userA = 'user-rec-alice';
-      const userB = 'user-rec-bob';
-      const pin = '555666';
+    test(
+      'Recovery codes are unique per user and automatically generated',
+      () async {
+        const userA = 'user-rec-alice';
+        const userB = 'user-rec-bob';
+        const pin = '555666';
 
-      final initCodeA = await vaultRepository.initializeNewVault(
-        userId: userA,
-        pin: pin,
-      );
-      final initCodeB = await vaultRepository.initializeNewVault(
-        userId: userB,
-        pin: pin,
-      );
+        final initCodeA = await vaultRepository.initializeNewVault(
+          userId: userA,
+          pin: pin,
+        );
+        final initCodeB = await vaultRepository.initializeNewVault(
+          userId: userB,
+          pin: pin,
+        );
 
-      // Recovery codes are generated and unique
-      expect(initCodeA, isNotEmpty);
-      expect(initCodeB, isNotEmpty);
-      expect(initCodeA, isNot(equals(initCodeB)));
-      expect(await vaultRepository.hasRecoveryCode(userA), isTrue);
-      expect(await vaultRepository.hasRecoveryCode(userB), isTrue);
-      expect(await vaultRepository.getRecoveryCode(userA), equals(initCodeA));
-      expect(await vaultRepository.getRecoveryCode(userB), equals(initCodeB));
+        // Recovery codes are generated and unique
+        expect(initCodeA, isNotEmpty);
+        expect(initCodeB, isNotEmpty);
+        expect(initCodeA, isNot(equals(initCodeB)));
+        expect(await vaultRepository.hasRecoveryCode(userA), isTrue);
+        expect(await vaultRepository.hasRecoveryCode(userB), isTrue);
+        expect(await vaultRepository.getRecoveryCode(userA), equals(initCodeA));
+        expect(await vaultRepository.getRecoveryCode(userB), equals(initCodeB));
 
-      // Can replace recovery codes for both
-      final codeA = await vaultRepository.generateOrReplaceRecoveryCode(
-        userId: userA,
-        currentPin: pin,
-      );
-      final codeB = await vaultRepository.generateOrReplaceRecoveryCode(
-        userId: userB,
-        currentPin: pin,
-      );
+        // Can replace recovery codes for both
+        final codeA = await vaultRepository.generateOrReplaceRecoveryCode(
+          userId: userA,
+          currentPin: pin,
+        );
+        final codeB = await vaultRepository.generateOrReplaceRecoveryCode(
+          userId: userB,
+          currentPin: pin,
+        );
 
-      expect(codeA, isNotEmpty);
-      expect(codeB, isNotEmpty);
-      expect(codeA, isNot(equals(codeB)));
-      expect(codeA, isNot(equals(initCodeA)));
+        expect(codeA, isNotEmpty);
+        expect(codeB, isNotEmpty);
+        expect(codeA, isNot(equals(codeB)));
+        expect(codeA, isNot(equals(initCodeA)));
 
-      expect(await vaultRepository.hasRecoveryCode(userA), isTrue);
-      expect(await vaultRepository.hasRecoveryCode(userB), isTrue);
-      expect(await vaultRepository.getRecoveryCode(userA), equals(codeA));
-      expect(await vaultRepository.getRecoveryCode(userB), equals(codeB));
-    });
+        expect(await vaultRepository.hasRecoveryCode(userA), isTrue);
+        expect(await vaultRepository.hasRecoveryCode(userB), isTrue);
+        expect(await vaultRepository.getRecoveryCode(userA), equals(codeA));
+        expect(await vaultRepository.getRecoveryCode(userB), equals(codeB));
+      },
+    );
 
     test(
       'Recovery code resets PIN while preserving the original master key',

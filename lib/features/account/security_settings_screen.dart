@@ -335,8 +335,8 @@ class _SecuritySettingsScreenState
                             child: Text(
                               _isRecoveryCodeObscured
                                   ? (_currentRecoveryCode!.startsWith('PRIV-')
-                                      ? 'PRIV-••••-••••-••••-••••'
-                                      : '••••-••••-••••-••••')
+                                        ? 'PRIV-••••-••••-••••-••••'
+                                        : '••••-••••-••••-••••')
                                   : _currentRecoveryCode!,
                               style: AppTypography.labelMedium.copyWith(
                                 fontFamily: 'monospace',
@@ -363,7 +363,9 @@ class _SecuritySettingsScreenState
                                     !_isRecoveryCodeObscured;
                               });
                             },
-                            tooltip: _isRecoveryCodeObscured ? 'Reveal' : 'Hide',
+                            tooltip: _isRecoveryCodeObscured
+                                ? 'Reveal'
+                                : 'Hide',
                           ),
                           IconButton(
                             icon: const Icon(
@@ -382,7 +384,9 @@ class _SecuritySettingsScreenState
                               );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Recovery code copied to clipboard'),
+                                  content: Text(
+                                    'Recovery code copied to clipboard',
+                                  ),
                                   behavior: SnackBarBehavior.floating,
                                 ),
                               );

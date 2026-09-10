@@ -93,8 +93,9 @@ class VaultRepository {
       // 6. Optional: persist PIN envelope if supported by remote schema
       final pinSalt = await secureKeyService.getPinSalt(userId);
       final pinVerifier = await secureKeyService.getPinVerifier(userId);
-      final wrappedMasterKey =
-          await secureKeyService.getWrappedMasterKey(userId);
+      final wrappedMasterKey = await secureKeyService.getWrappedMasterKey(
+        userId,
+      );
       final kekNonce = await secureKeyService.getKekNonce(userId);
 
       if (pinSalt != null &&
@@ -295,7 +296,9 @@ class VaultRepository {
             pinVerifier: pinVerifier,
           );
         } catch (dbErr) {
-          debugPrint('Server PIN envelope update skipped during recovery: $dbErr');
+          debugPrint(
+            'Server PIN envelope update skipped during recovery: $dbErr',
+          );
         }
       }
     } catch (e) {

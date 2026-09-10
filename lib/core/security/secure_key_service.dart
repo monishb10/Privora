@@ -27,7 +27,22 @@ class SecureKeyService {
     if (effectiveId != null && effectiveId.isNotEmpty) {
       return '${effectiveId}_$baseKey';
     }
-    return baseKey;
+    return 'local_$baseKey';
+  }
+
+  /// Cleans legacy non-namespaced keys from earlier versions to prevent
+  /// cross-account credential leakage.
+  Future<void> cleanLegacySharedKeys() async {
+    await Future.wait([
+      _storage.delete(key: StorageConstants.securePinSalt),
+      _storage.delete(key: StorageConstants.securePinVerifier),
+      _storage.delete(key: StorageConstants.securePinWrappedMasterKey),
+      _storage.delete(key: StorageConstants.securePinKekNonce),
+      _storage.delete(key: StorageConstants.secureHasCompletedSetup),
+      _storage.delete(key: StorageConstants.secureRecoveryCode),
+      _storage.delete(key: StorageConstants.secureFailedPinAttempts),
+      _storage.delete(key: StorageConstants.secureLockoutUntil),
+    ]);
   }
 
   Future<void> savePinData({

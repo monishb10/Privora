@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -88,8 +89,15 @@ class _ChangePinScreenState extends ConsumerState<ChangePinScreen> {
         // Execute PIN change
         setState(() => _isLoading = true);
         try {
+          final user =
+              ref.read(currentUserProvider) ??
+              SupabaseConfig.client?.auth.currentUser;
           final vaultRepo = ref.read(vaultRepositoryProvider);
-          await vaultRepo.changePin(currentPin: _currentPin, newPin: _newPin);
+          await vaultRepo.changePin(
+            currentPin: _currentPin,
+            newPin: _newPin,
+            userId: user?.id,
+          );
 
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(

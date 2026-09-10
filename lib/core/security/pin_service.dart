@@ -18,6 +18,7 @@ class PinService {
 
   // Active in-memory master key for current session. Never persisted unencrypted.
   Uint8List? _activeMasterKey;
+  String? _activeUserId;
 
   PinService({required this.secureKeyService, required this.cryptoService});
 
@@ -26,6 +27,9 @@ class PinService {
 
   /// Accessor for active master key in memory
   Uint8List? get activeMasterKey => _activeMasterKey;
+
+  /// Accessor for the user ID of the currently unlocked vault
+  String? get activeUserId => _activeUserId;
 
   String? _resolveUserId(String? userId) {
     if (userId != null && userId.isNotEmpty) return userId;
@@ -55,6 +59,7 @@ class PinService {
     );
 
     _activeMasterKey = Uint8List.fromList(masterKey);
+    _activeUserId = effectiveUserId;
     await _secureKeyService.resetLockout(effectiveUserId);
   }
 
@@ -101,6 +106,11 @@ class PinService {
       return false;
     }
 
+    // If an active session exists for another user, lock it immediately
+    if (_activeUserId != null && _activeUserId != effectiveUserId) {
+      lockSession();
+    }
+
     // Success: unwrap master key
     try {
       final kek = await _cryptoService.deriveKeyFromPin(pin, salt);
@@ -111,6 +121,7 @@ class PinService {
       );
 
       _activeMasterKey = masterKey;
+      _activeUserId = effectiveUserId;
       await _secureKeyService.resetLockout(effectiveUserId);
       return true;
     } catch (e) {
@@ -145,6 +156,7 @@ class PinService {
       }
       _activeMasterKey = null;
     }
+    _activeUserId = null;
   }
 
   /// Restores master key from recovery flow and sets a new PIN

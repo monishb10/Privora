@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
@@ -400,9 +401,12 @@ class _PinVerificationDialogState
     setState(() => _isVerifying = true);
 
     try {
+      final user =
+          ref.read(currentUserProvider) ??
+          SupabaseConfig.client?.auth.currentUser;
       final isValid = await ref
           .read(vaultRepositoryProvider)
-          .verifyAndUnlock(_pin);
+          .verifyAndUnlock(_pin, userId: user?.id);
       if (!mounted) return;
 
       if (isValid) {

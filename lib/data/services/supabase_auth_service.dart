@@ -19,7 +19,7 @@ class SupabaseAuthService {
             serverClientId: Environment.googleWebClientId.isNotEmpty
                 ? Environment.googleWebClientId
                 : null,
-            scopes: const ['email', 'profile', 'openid'],
+            scopes: const ['email'],
           );
 
   GoogleSignIn get googleSignIn => _googleSignIn;
@@ -107,21 +107,21 @@ class SupabaseAuthService {
         '[Auth] Initiating Google Sign-In with serverClientId audience: $webClientId',
       );
 
-      // Ensure GoogleSignIn has the correct serverClientId
+      // Ensure GoogleSignIn has the correct serverClientId and scopes
       if (_googleSignIn.serverClientId != webClientId) {
         _googleSignIn = GoogleSignIn(
           serverClientId: webClientId,
-          scopes: const ['email', 'profile', 'openid'],
+          scopes: const ['email'],
         );
       }
 
-      // Clear previous local Google account session so Google Play Services
-      // always presents the native account selection sheet, allowing the user
-      // to pick any Google account on the device or add another account.
-      try {
-        await _googleSignIn.signOut();
-      } catch (e) {
-        debugPrint('[Auth] GoogleSignIn pre-sign-in signOut note: $e');
+      // If an account is already cached locally, clear it so the account chooser appears
+      if (_googleSignIn.currentUser != null) {
+        try {
+          await _googleSignIn.signOut();
+        } catch (e) {
+          debugPrint('[Auth] GoogleSignIn pre-sign-in signOut note: $e');
+        }
       }
 
       // 2. Display native Android / iOS Google account chooser

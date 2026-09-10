@@ -77,6 +77,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         ref.read(photoRepositoryProvider).cleanExpiredTrash(user.id);
       } catch (_) {}
 
+      // Clean any legacy un-namespaced keys from older versions to enforce multi-account isolation
+      try {
+        await ref.read(secureKeyServiceProvider).cleanLegacySharedKeys();
+      } catch (_) {}
+
       // Verify vault setup from server record with bounded wait (10 seconds)
       Map<String, dynamic>? serverVault;
       bool lookupFailed = false;
