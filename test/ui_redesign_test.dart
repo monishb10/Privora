@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:privora/app/providers.dart';
-import 'package:privora/core/constants/app_constants.dart';
 import 'package:privora/core/theme/app_theme.dart';
 import 'package:privora/core/widgets/privora_brand_app_bar.dart';
 import 'package:privora/core/widgets/privora_floating_nav_bar.dart';

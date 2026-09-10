@@ -56,9 +56,10 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
       icon: Icons.logout_rounded,
     );
     if (confirmed == true && mounted) {
-      await ref.read(authRepositoryProvider).signOut();
+      final authRepo = ref.read(authRepositoryProvider);
       ref.invalidate(currentUserProvider);
       ref.invalidate(categoriesProvider);
+      await authRepo.signOut();
       if (mounted) {
         context.go('/login');
       }

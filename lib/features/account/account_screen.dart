@@ -290,12 +290,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     );
 
     if (confirmed == true && mounted) {
-      await ref.read(authRepositoryProvider).signOut();
-      ref.read(categoryRepositoryProvider).clearCache();
+      final authRepo = ref.read(authRepositoryProvider);
+      final catRepo = ref.read(categoryRepositoryProvider);
+      catRepo.clearCache();
       ref.invalidate(currentUserProvider);
       ref.invalidate(categoriesProvider);
       ref.invalidate(recentlyDeletedPhotosProvider);
       ref.invalidate(storageUsageProvider);
+      await authRepo.signOut();
       if (mounted) {
         Navigator.of(
           context,
