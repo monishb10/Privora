@@ -73,14 +73,20 @@ class VaultRepository {
         );
       }
 
-      // 3. Persist PIN envelope to Supabase vault_keys
-      await databaseService.saveVaultPinEnvelope(
-        userId: userId,
-        pinWrappedKey: wrappedMasterKey,
-        pinSalt: pinSalt,
-        pinNonce: kekNonce,
-        pinVerifier: pinVerifier,
-      );
+      // 3. Persist PIN envelope to Supabase vault_keys if server schema supports it (optional backup)
+      try {
+        await databaseService.saveVaultPinEnvelope(
+          userId: userId,
+          pinWrappedKey: wrappedMasterKey,
+          pinSalt: pinSalt,
+          pinNonce: kekNonce,
+          pinVerifier: pinVerifier,
+        );
+      } catch (dbErr) {
+        // If remote vault_keys table lacks pin_wrapped_key column, log note and continue.
+        // The vault is fully secured locally on device via SecureKeyService.
+        debugPrint('Server PIN envelope backup skipped (optional cloud backup): $dbErr');
+      }
     } catch (e) {
       debugPrint('initializeNewVault error: $e');
       if (e is CryptoException) rethrow;
@@ -238,18 +244,22 @@ class VaultRepository {
       );
       final kekNonce = await secureKeyService.getKekNonce(userId);
 
-      // Also persist updated PIN envelope to Supabase vault_keys
+      // Also persist updated PIN envelope to Supabase vault_keys if supported
       if (pinSalt != null &&
           pinVerifier != null &&
           wrappedMasterKey != null &&
           kekNonce != null) {
-        await databaseService.saveVaultPinEnvelope(
-          userId: userId,
-          pinWrappedKey: wrappedMasterKey,
-          pinSalt: pinSalt,
-          pinNonce: kekNonce,
-          pinVerifier: pinVerifier,
-        );
+        try {
+          await databaseService.saveVaultPinEnvelope(
+            userId: userId,
+            pinWrappedKey: wrappedMasterKey,
+            pinSalt: pinSalt,
+            pinNonce: kekNonce,
+            pinVerifier: pinVerifier,
+          );
+        } catch (dbErr) {
+          debugPrint('Server PIN envelope update skipped during recovery: $dbErr');
+        }
       }
     } catch (e) {
       debugPrint('recoverVault error: $e');

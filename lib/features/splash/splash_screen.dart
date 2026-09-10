@@ -106,29 +106,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      if (serverVault == null) {
-        // Confirmed: Authenticated user with no PIN/vault setup -> Create PIN
-        context.go('/create-pin');
+      // 1. If this device has completed PIN setup for this user, unlock or enter PIN
+      if (hasLocal) {
+        if (!isLocked && vaultRepo.hasActiveKey) {
+          context.go('/categories');
+        } else {
+          context.go('/unlock');
+        }
         return;
       }
 
-      if (!hasLocal) {
-        final synced = await vaultRepo.syncServerPinEnvelopeIfMissing(user.id);
-        if (!mounted) return;
-        if (!synced) {
-          // Required local key material missing and no PIN envelope -> Recovery flow
-          context.go('/recover-vault');
-          return;
-        }
-      }
-
-      if (!mounted) return;
-
-      // Rule: Authenticated and unlocked user -> Categories; otherwise Enter PIN
-      if (!isLocked && vaultRepo.hasActiveKey) {
-        context.go('/categories');
+      // 2. If no local setup on this device, check for cloud recovery record
+      if (serverVault != null &&
+          serverVault['recovery_wrapped_key'] != null &&
+          serverVault['recovery_wrapped_key'].toString().isNotEmpty) {
+        // Returning user on a new device with cloud recovery record -> Recovery flow
+        context.go('/recover-vault');
       } else {
-        context.go('/unlock');
+        // Fresh user with no existing vault -> Create PIN
+        context.go('/create-pin');
       }
     } finally {
       if (mounted) {

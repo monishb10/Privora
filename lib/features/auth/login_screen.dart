@@ -58,27 +58,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
 
-      // Check server vault information for this user
+      // Check local and server vault status for this user
       final vaultRepo = ref.read(vaultRepositoryProvider);
-      final serverVault = await vaultRepo.getServerVaultData(user.id);
+      final hasLocalKeys = await vaultRepo.hasCompletedSetup(user.id);
 
       if (!mounted) return;
 
-      if (serverVault == null) {
-        // Authenticated user with no existing cloud vault -> Setup 6-digit PIN
-        context.go('/create-pin');
+      if (hasLocalKeys) {
+        // User already has PIN setup on this device -> Unlock with 6-digit PIN
+        context.go('/unlock');
       } else {
-        // User has an existing cloud vault -> Synchronize PIN envelope if needed
-        final hasLocalKeys = await vaultRepo.syncServerPinEnvelopeIfMissing(
-          user.id,
-        );
+        // No local keys on this device: check if user has a cloud recovery record
+        final serverVault = await vaultRepo.getServerVaultData(user.id);
         if (!mounted) return;
-        if (hasLocalKeys) {
-          // Returning user on configured device -> Unlock with 6-digit PIN
-          context.go('/unlock');
-        } else {
-          // Returning user on new device without PIN envelope on server -> Recovery flow
+
+        if (serverVault != null &&
+            serverVault['recovery_wrapped_key'] != null &&
+            serverVault['recovery_wrapped_key'].toString().isNotEmpty) {
+          // Returning user on new device with existing recovery envelope -> Vault recovery flow
           context.go('/recover-vault');
+        } else {
+          // Fresh user with no existing vault -> Setup 6-digit PIN
+          context.go('/create-pin');
         }
       }
     } catch (e) {
