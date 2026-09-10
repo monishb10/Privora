@@ -334,9 +334,15 @@ void main() {
     test(
       'GOOGLE_WEB_CLIENT_ID validation strictly rejects empty, placeholder, and invalid suffix',
       () {
-        // Current environment in tests has no --dart-define and is flagged invalid
-        expect(Environment.validateGoogleWebClientId(), isNotNull);
-        expect(Environment.isGoogleWebClientIdValid, isFalse);
+        // Current environment in tests has configured default Web Client ID and is valid
+        expect(Environment.validateGoogleWebClientId(), isNull);
+        expect(Environment.isGoogleWebClientIdValid, isTrue);
+        expect(
+          Environment.googleWebClientId,
+          equals(
+            '724610060172-c1bf0dasha3cf3sbdpk7r18vb92u2bnv.apps.googleusercontent.com',
+          ),
+        );
 
         // Validation logic helper matching Environment.validateGoogleWebClientId
         String? testValidate(String raw) {

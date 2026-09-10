@@ -21,13 +21,11 @@ class Environment {
   );
 
   /// Google Web OAuth Client ID used as serverClientId for native Google Sign-In.
-  static const String _rawGoogleWebClientId = String.fromEnvironment(
+  static const String googleWebClientId = String.fromEnvironment(
     'GOOGLE_WEB_CLIENT_ID',
-    defaultValue: '',
+    defaultValue:
+        '724610060172-c1bf0dasha3cf3sbdpk7r18vb92u2bnv.apps.googleusercontent.com',
   );
-
-  /// Trimmed Google Web OAuth Client ID (whitespace and newlines removed)
-  static String get googleWebClientId => _rawGoogleWebClientId.trim();
 
   /// Validates the GOOGLE_WEB_CLIENT_ID according to strict requirements:
   /// - Reject empty value
@@ -35,7 +33,7 @@ class Environment {
   /// - Require .apps.googleusercontent.com suffix
   /// Returns an error message if invalid, or null if valid.
   static String? validateGoogleWebClientId() {
-    final clientId = googleWebClientId;
+    final clientId = googleWebClientId.trim();
     if (clientId.isEmpty) {
       return 'GOOGLE_WEB_CLIENT_ID is not configured. Supply your Web client ID via --dart-define=GOOGLE_WEB_CLIENT_ID=<id>.apps.googleusercontent.com';
     }

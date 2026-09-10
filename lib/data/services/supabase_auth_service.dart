@@ -9,15 +9,15 @@ import '../../core/errors/error_mapper.dart';
 
 /// Service managing Supabase authentication (Native Google Sign-In with IdToken, Email/Password).
 class SupabaseAuthService {
-  GoogleSignIn _googleSignIn;
+  final GoogleSignIn _googleSignIn;
   bool _isGoogleSignInRunning = false;
 
   SupabaseAuthService({GoogleSignIn? googleSignIn})
     : _googleSignIn =
           googleSignIn ??
           GoogleSignIn(
-            serverClientId: Environment.googleWebClientId.isNotEmpty
-                ? Environment.googleWebClientId
+            serverClientId: Environment.googleWebClientId.trim().isNotEmpty
+                ? Environment.googleWebClientId.trim()
                 : null,
             scopes: const ['email'],
           );
@@ -106,14 +106,6 @@ class SupabaseAuthService {
       debugPrint(
         '[Auth] Initiating Google Sign-In with serverClientId audience: $webClientId',
       );
-
-      // Ensure GoogleSignIn has the correct serverClientId and scopes
-      if (_googleSignIn.serverClientId != webClientId) {
-        _googleSignIn = GoogleSignIn(
-          serverClientId: webClientId,
-          scopes: const ['email'],
-        );
-      }
 
       // If an account is already cached locally, clear it so the account chooser appears
       if (_googleSignIn.currentUser != null) {
