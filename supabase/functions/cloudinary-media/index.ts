@@ -185,19 +185,24 @@ serve(async (req: Request) => {
       }
       const thumbSignature = await signCloudinaryParams(thumbSignedParams, apiSecret);
 
-      // Track pending upload in server-controlled database table
-      await dbClient.from("pending_uploads").upsert(
-        {
-          user_id: userId,
-          category_id: categoryId,
-          photo_id: photoId,
-          full_public_id: fullPublicId,
-          thumbnail_public_id: thumbPublicId,
-          status: "pending",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "photo_id" },
-      );
+      // Track pending upload in server-controlled database table if present
+      try {
+        await dbClient.from("pending_uploads").upsert(
+          {
+            user_id: userId,
+            category_id: categoryId,
+            photo_id: photoId,
+            full_public_id: fullPublicId,
+            thumbnail_public_id: thumbPublicId,
+            status: "pending",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "photo_id" },
+        );
+      } catch (err) {
+        // Safe fallback if pending_uploads table has not been created yet
+        console.warn("pending_uploads upsert skipped:", err);
+      }
 
       return new Response(
         JSON.stringify({
@@ -297,11 +302,41 @@ serve(async (req: Request) => {
         updated_at: now,
       };
 
-      const { data: inserted, error: insertError } = await dbClient
+      let inserted = null;
+      let insertError = null;
+
+      const { data: extData, error: extErr } = await dbClient
         .from("photos")
         .insert(insertData)
         .select()
         .single();
+
+      if (extErr && (extErr.code === "42703" || extErr.message?.includes("column"))) {
+        const baseInsertData = {
+          id: photoId,
+          user_id: userId,
+          category_id: categoryId,
+          storage_path: pending.full_public_id,
+          thumbnail_path: pending.thumbnail_public_id,
+          display_name: displayName || "Encrypted Photo",
+          mime_type: mimeType || "image/jpeg",
+          encrypted_size: encryptedSize || 0,
+          width: width || null,
+          height: height || null,
+          created_at: now,
+          updated_at: now,
+        };
+        const { data: bData, error: bErr } = await dbClient
+          .from("photos")
+          .insert(baseInsertData)
+          .select()
+          .single();
+        inserted = bData;
+        insertError = bErr;
+      } else {
+        inserted = extData;
+        insertError = extErr;
+      }
 
       if (insertError) {
         return new Response(
@@ -339,7 +374,7 @@ serve(async (req: Request) => {
       // Verify photo exists and strictly belongs to auth.uid()
       const { data: photo, error: photoError } = await dbClient
         .from("photos")
-        .select("id, cloudinary_public_id, cloudinary_thumbnail_public_id")
+        .select("id, storage_path, thumbnail_path")
         .eq("id", photoId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -352,8 +387,8 @@ serve(async (req: Request) => {
       }
 
       const publicId = target === "thumbnail"
-        ? photo.cloudinary_thumbnail_public_id
-        : photo.cloudinary_public_id;
+        ? ((photo as any).thumbnail_path || (photo as any).cloudinary_thumbnail_public_id)
+        : ((photo as any).storage_path || (photo as any).cloudinary_public_id);
 
       if (!publicId) {
         return new Response(
@@ -399,7 +434,7 @@ serve(async (req: Request) => {
       // Validate ownership in database and prevent race condition with restore
       const { data: photo, error: photoError } = await dbClient
         .from("photos")
-        .select("id, cloudinary_public_id, cloudinary_thumbnail_public_id, deleted_at")
+        .select("id, storage_path, thumbnail_path, deleted_at")
         .eq("id", photoId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -411,9 +446,12 @@ serve(async (req: Request) => {
         );
       }
 
+      const fullPublicId = (photo as any).storage_path || (photo as any).cloudinary_public_id;
+      const thumbPublicId = (photo as any).thumbnail_path || (photo as any).cloudinary_thumbnail_public_id;
+
       // 1. Destroy full and thumbnail assets on Cloudinary
-      const fullOk = await destroyAsset(photo.cloudinary_public_id);
-      const thumbOk = await destroyAsset(photo.cloudinary_thumbnail_public_id);
+      const fullOk = fullPublicId ? await destroyAsset(fullPublicId) : true;
+      const thumbOk = thumbPublicId ? await destroyAsset(thumbPublicId) : true;
 
       if (!fullOk && !thumbOk) {
         return new Response(
@@ -513,7 +551,7 @@ serve(async (req: Request) => {
       // Find expired photos across all users (or this user)
       let query = dbClient
         .from("photos")
-        .select("id, cloudinary_public_id, cloudinary_thumbnail_public_id, storage_provider")
+        .select("id, storage_path, thumbnail_path")
         .not("deleted_at", "is", null)
         .not("delete_after", "is", null)
         .lte("delete_after", now);
@@ -532,9 +570,13 @@ serve(async (req: Request) => {
 
       let deletedCount = 0;
       for (const photo of expiredPhotos || []) {
-        if (photo.storage_provider === "cloudinary") {
-          await destroyAsset(photo.cloudinary_public_id);
-          await destroyAsset(photo.cloudinary_thumbnail_public_id);
+        const fullPub = (photo as any).storage_path || (photo as any).cloudinary_public_id;
+        const thumbPub = (photo as any).thumbnail_path || (photo as any).cloudinary_thumbnail_public_id;
+        if (typeof fullPub === "string" && fullPub.startsWith("privora/")) {
+          await destroyAsset(fullPub);
+        }
+        if (typeof thumbPub === "string" && thumbPub.startsWith("privora/")) {
+          await destroyAsset(thumbPub);
         }
         await dbClient.from("photos").delete().eq("id", photo.id);
         deletedCount++;

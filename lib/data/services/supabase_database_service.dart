@@ -396,7 +396,25 @@ class SupabaseDatabaseService {
     }
   }
 
+  // Track whether backend schema supports migration 003 extended columns
+  static bool? _hasExtendedPhotoColumns;
+
   Future<VaultPhoto> insertPhoto(VaultPhoto photo) async {
+    // If known not to have extended columns, directly use base schema (001_privora_schema.sql)
+    if (_hasExtendedPhotoColumns == false) {
+      try {
+        final data = await _client
+            .from(StorageConstants.tablePhotos)
+            .insert(photo.toBaseJson())
+            .select()
+            .single();
+        return VaultPhoto.fromJson(data);
+      } catch (e) {
+        debugPrint('insertPhoto (base schema) error: $e');
+        throw StorageException(ErrorMapper.mapToUserMessage(e));
+      }
+    }
+
     try {
       final data = await _client
           .from(StorageConstants.tablePhotos)
@@ -404,8 +422,33 @@ class SupabaseDatabaseService {
           .select()
           .single();
 
+      _hasExtendedPhotoColumns = true;
       return VaultPhoto.fromJson(data);
     } catch (e) {
+      final errorStr = e.toString().toLowerCase();
+      // Handle missing migration columns gracefully (Postgres 42703 or PostgREST schema cache)
+      if (errorStr.contains('42703') ||
+          errorStr.contains('column') ||
+          errorStr.contains('schema cache') ||
+          errorStr.contains('storage_provider') ||
+          errorStr.contains('cloudinary_public_id')) {
+        debugPrint(
+          'insertPhoto: extended columns missing on backend, switching to base schema: $e',
+        );
+        _hasExtendedPhotoColumns = false;
+        try {
+          final data = await _client
+              .from(StorageConstants.tablePhotos)
+              .insert(photo.toBaseJson())
+              .select()
+              .single();
+
+          return VaultPhoto.fromJson(data);
+        } catch (retryError) {
+          debugPrint('insertPhoto base schema fallback error: $retryError');
+          throw StorageException(ErrorMapper.mapToUserMessage(retryError));
+        }
+      }
       debugPrint('insertPhoto error: $e');
       throw StorageException(ErrorMapper.mapToUserMessage(e));
     }
@@ -429,13 +472,34 @@ class SupabaseDatabaseService {
   }
 
   Future<void> updatePhoto(VaultPhoto photo) async {
+    final payload = (_hasExtendedPhotoColumns == false)
+        ? photo.toBaseJson()
+        : photo.toJson();
     try {
       await _client
           .from(StorageConstants.tablePhotos)
-          .update(photo.toJson())
+          .update(payload)
           .eq('id', photo.id)
           .eq('user_id', photo.userId);
     } catch (e) {
+      final errorStr = e.toString().toLowerCase();
+      if (_hasExtendedPhotoColumns != false &&
+          (errorStr.contains('42703') ||
+              errorStr.contains('column') ||
+              errorStr.contains('schema cache'))) {
+        _hasExtendedPhotoColumns = false;
+        try {
+          await _client
+              .from(StorageConstants.tablePhotos)
+              .update(photo.toBaseJson())
+              .eq('id', photo.id)
+              .eq('user_id', photo.userId);
+          return;
+        } catch (retryError) {
+          debugPrint('updatePhoto base fallback error: $retryError');
+          throw StorageException(ErrorMapper.mapToUserMessage(retryError));
+        }
+      }
       debugPrint('updatePhoto error: $e');
       throw StorageException(ErrorMapper.mapToUserMessage(e));
     }

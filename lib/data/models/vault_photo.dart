@@ -62,7 +62,11 @@ class VaultPhoto {
   });
 
   bool get isDeleted => deletedAt != null;
-  bool get isCloudinary => storageProvider == 'cloudinary';
+  bool get isCloudinary =>
+      storageProvider == 'cloudinary' ||
+      storagePath.startsWith('privora/') ||
+      thumbnailPath.startsWith('privora/') ||
+      (cloudinaryPublicId != null && cloudinaryPublicId!.isNotEmpty);
 
   int get remainingDays {
     if (deleteAfter == null) return 30;
@@ -72,17 +76,33 @@ class VaultPhoto {
   }
 
   factory VaultPhoto.fromJson(Map<String, dynamic> json) {
-    final provider = json['storage_provider'] as String? ?? 'supabase';
     final cPubId = json['cloudinary_public_id'] as String?;
     final cThumbId = json['cloudinary_thumbnail_public_id'] as String?;
+    final rawStoragePath = json['storage_path'] as String? ?? cPubId ?? '';
+    final rawThumbPath = json['thumbnail_path'] as String? ?? cThumbId ?? '';
+
+    // Smart provider detection:
+    // If 'storage_provider' column is explicit in the record, respect it.
+    // If absent (null), check if storagePath or thumbnailPath starts with 'privora/'
+    // or if Cloudinary IDs exist. If so, it is Cloudinary. Otherwise default to 'supabase'.
+    final rawProvider = json['storage_provider'] as String?;
+    final provider =
+        rawProvider ??
+        ((rawStoragePath.startsWith('privora/') ||
+                rawThumbPath.startsWith('privora/') ||
+                cPubId != null)
+            ? 'cloudinary'
+            : 'supabase');
+
+    final isCloud = provider == 'cloudinary';
 
     return VaultPhoto(
       id: json['id'] as String,
       userId: json['user_id'] as String,
       categoryId: json['category_id'] as String? ?? '',
-      storagePath: json['storage_path'] as String? ?? cPubId ?? '',
-      thumbnailPath: json['thumbnail_path'] as String? ?? cThumbId ?? '',
-      displayName: json['display_name'] as String,
+      storagePath: rawStoragePath,
+      thumbnailPath: rawThumbPath,
+      displayName: json['display_name'] as String? ?? 'Encrypted Photo',
       mimeType: json['mime_type'] as String? ?? 'image/jpeg',
       encryptedSize: (json['encrypted_size'] is int)
           ? json['encrypted_size'] as int
@@ -104,22 +124,29 @@ class VaultPhoto {
           ? DateTime.parse(json['delete_after'] as String)
           : null,
       storageProvider: provider,
-      cloudinaryPublicId: cPubId,
-      cloudinaryThumbnailPublicId: cThumbId,
+      cloudinaryPublicId: cPubId ?? (isCloud ? rawStoragePath : null),
+      cloudinaryThumbnailPublicId: cThumbId ?? (isCloud ? rawThumbPath : null),
       cloudinaryAssetId: json['cloudinary_asset_id'] as String?,
       cloudinaryVersion: json['cloudinary_version']?.toString(),
       encryptedBytes: json['encrypted_bytes'] as int?,
-      originalFilename: json['original_filename'] as String?,
+      originalFilename:
+          json['original_filename'] as String? ??
+          json['display_name'] as String?,
     );
   }
 
-  Map<String, dynamic> toJson() {
+  /// Base schema serialization strictly using columns guaranteed in 001_privora_schema.sql
+  Map<String, dynamic> toBaseJson() {
     return {
       'id': id,
       'user_id': userId,
       'category_id': categoryId.isNotEmpty ? categoryId : null,
-      'storage_path': storagePath,
-      'thumbnail_path': thumbnailPath,
+      'storage_path': storagePath.isNotEmpty
+          ? storagePath
+          : (cloudinaryPublicId ?? ''),
+      'thumbnail_path': thumbnailPath.isNotEmpty
+          ? thumbnailPath
+          : (cloudinaryThumbnailPublicId ?? ''),
       'display_name': displayName,
       'mime_type': mimeType,
       'encrypted_size': encryptedSize,
@@ -129,6 +156,14 @@ class VaultPhoto {
       'updated_at': updatedAt.toIso8601String(),
       if (deletedAt != null) 'deleted_at': deletedAt?.toIso8601String(),
       if (deleteAfter != null) 'delete_after': deleteAfter?.toIso8601String(),
+    };
+  }
+
+  /// Extended schema serialization including optional migration 003 columns
+  Map<String, dynamic> toExtendedJson() {
+    final base = toBaseJson();
+    return {
+      ...base,
       if (storageProvider != 'supabase') 'storage_provider': storageProvider,
       if (cloudinaryPublicId != null)
         'cloudinary_public_id': cloudinaryPublicId,
@@ -140,6 +175,8 @@ class VaultPhoto {
       if (originalFilename != null) 'original_filename': originalFilename,
     };
   }
+
+  Map<String, dynamic> toJson() => toExtendedJson();
 
   VaultPhoto copyWith({
     String? id,
