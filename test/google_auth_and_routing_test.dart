@@ -189,7 +189,8 @@ void main() {
         await tester.pumpAndSettle();
 
         // Verify Privora branding
-        expect(find.text('Privora'), findsOneWidget);
+        expect(find.byKey(const Key('privora_brand_wordmark')), findsOneWidget);
+        expect(find.bySemanticsLabel('Privora'), findsOneWidget);
         expect(find.text('Your private cloud gallery'), findsOneWidget);
 
         // Verify Continue with Google button

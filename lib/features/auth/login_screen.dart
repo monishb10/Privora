@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/google_icon.dart';
 import '../../core/widgets/privora_button.dart';
 import '../../core/widgets/privora_logo.dart';
+import '../../core/widgets/privora_wordmark.dart';
 
 /// Clean Google-only Authentication Screen for Privora.
 /// Replaces visible email/password inputs with a single "Continue with Google" action,
@@ -142,13 +142,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // App Title
-                  const Text(
-                    AppConstants.appName,
-                    style: AppTypography.displayLarge,
-                    textAlign: TextAlign.center,
+                  // App Title (Brand Wordmark with matching stylization)
+                  const PrivoraWordmark(
+                    height: 38,
+                    wordmarkKey: Key('privora_brand_wordmark'),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   // Subtitle
                   Text(
