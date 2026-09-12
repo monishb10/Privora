@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/privora_button.dart';
 import '../../core/widgets/privora_logo.dart';
+import '../../core/widgets/privora_wordmark.dart';
 
 /// Onboarding Welcome screen for first-time visitors.
 class WelcomeScreen extends StatelessWidget {
@@ -58,10 +59,7 @@ class WelcomeScreen extends StatelessWidget {
                 children: [
                   const PrivoraLogo(size: 42, showShadow: false),
                   const SizedBox(width: 12),
-                  const Text(
-                    AppConstants.appName,
-                    style: AppTypography.brandTitle,
-                  ),
+                  const PrivoraWordmark(height: 26),
                 ],
               ),
               const Spacer(flex: 1),
