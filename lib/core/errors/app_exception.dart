@@ -45,7 +45,14 @@ class CryptoException extends AppException {
 }
 
 class StorageException extends AppException {
-  const StorageException(super.message, {super.code});
+  final int? statusCode;
+
+  const StorageException(
+    super.message, {
+    super.code,
+    super.details,
+    this.statusCode,
+  });
 }
 
 class PermissionException extends AppException {
@@ -68,8 +75,8 @@ class QuotaExceededException extends AppException {
   ]);
 }
 
-class RecoveryException extends AppException {
-  const RecoveryException(super.message, {super.code});
+class PinResetException extends AppException {
+  const PinResetException(super.message, {super.code});
 }
 
 class ValidationException extends AppException {

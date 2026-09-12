@@ -56,29 +56,6 @@ class SupabaseDatabaseService {
   // VAULT KEYS
   // -------------------------------------------------------------
 
-  Future<void> saveVaultKeys({
-    required String userId,
-    required String recoveryWrappedKey,
-    required String recoverySalt,
-    required String recoveryNonce,
-    int cryptoVersion = 1,
-  }) async {
-    try {
-      await _client.from(StorageConstants.tableVaultKeys).upsert({
-        'user_id': userId,
-        'recovery_wrapped_key': recoveryWrappedKey,
-        'recovery_salt': recoverySalt,
-        'recovery_nonce': recoveryNonce,
-        'has_recovery_code': true,
-        'crypto_version': cryptoVersion,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('saveVaultKeys error: $e');
-      throw CryptoException(ErrorMapper.mapToUserMessage(e));
-    }
-  }
-
   Future<void> saveVaultPinEnvelope({
     required String userId,
     required String pinWrappedKey,
@@ -103,28 +80,6 @@ class SupabaseDatabaseService {
     }
   }
 
-  Future<void> saveRecoveryEnvelope({
-    required String userId,
-    required String recoveryWrappedKey,
-    required String recoverySalt,
-    required String recoveryNonce,
-    int cryptoVersion = 1,
-  }) async {
-    try {
-      await _client.from(StorageConstants.tableVaultKeys).upsert({
-        'user_id': userId,
-        'recovery_wrapped_key': recoveryWrappedKey,
-        'recovery_salt': recoverySalt,
-        'recovery_nonce': recoveryNonce,
-        'crypto_version': cryptoVersion,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('saveRecoveryEnvelope error: $e');
-      throw CryptoException(ErrorMapper.mapToUserMessage(e));
-    }
-  }
-
   Future<Map<String, dynamic>?> getVaultKeys(String userId) async {
     try {
       final data = await _client
@@ -136,20 +91,6 @@ class SupabaseDatabaseService {
     } catch (e) {
       debugPrint('getVaultKeys error: $e');
       throw CryptoException(ErrorMapper.mapToUserMessage(e));
-    }
-  }
-
-  Future<bool> hasRecoveryCode(String userId) async {
-    try {
-      final data = await getVaultKeys(userId);
-      if (data == null) return false;
-      final hasCode = data['has_recovery_code'] as bool? ?? false;
-      final recoveryWrappedKey = data['recovery_wrapped_key'] as String?;
-      return hasCode ||
-          (recoveryWrappedKey != null && recoveryWrappedKey.isNotEmpty);
-    } catch (e) {
-      debugPrint('hasRecoveryCode error: $e');
-      return false;
     }
   }
 

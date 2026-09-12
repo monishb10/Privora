@@ -40,7 +40,12 @@ class _PrivoraAppState extends ConsumerState<PrivoraApp> {
       if (isLocked && previous == false) {
         final user = ref.read(currentUserProvider);
         if (user != null) {
-          router.go('/unlock');
+          final path = router.routeInformationProvider.value.uri.path;
+          // The Gmail app may briefly background Privora while the user reads
+          // an OTP. Keep the reset screen alive; it has no unlocked vault key.
+          if (path != '/forgot-pin') {
+            router.go('/unlock');
+          }
         }
       }
     });

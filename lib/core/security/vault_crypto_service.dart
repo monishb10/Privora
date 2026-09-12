@@ -128,22 +128,9 @@ class VaultCryptoService {
     }
   }
 
-  /// Generates a human-friendly, high-entropy recovery code (e.g. PRIV-XXXX-XXXX-XXXX-XXXX)
-  String generateRecoveryCode() {
-    const chars =
-        '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // base32 without ambiguous 0/O/1/I
-    String group() {
-      return List.generate(
-        4,
-        (_) => chars[_random.nextInt(chars.length)],
-      ).join();
-    }
-
-    return 'PRIV-${group()}-${group()}-${group()}-${group()}';
-  }
-
-  /// Derives a key from a recovery code and salt
-  Future<SecretKey> deriveKeyFromRecoveryCode(
+  /// Compatibility-only derivation used once to migrate an encrypted key from
+  /// older Privora builds. No new user-facing backup codes are generated.
+  Future<SecretKey> deriveKeyFromLegacyMigrationSecret(
     String code,
     Uint8List salt,
   ) async {

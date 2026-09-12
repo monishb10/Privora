@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -7,7 +8,7 @@ import '../../core/config/supabase_config.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/errors/error_mapper.dart';
 
-/// Service managing Supabase authentication (Native Google Sign-In with IdToken, Email/Password).
+/// Service managing Google authentication and Gmail OTP verification.
 class SupabaseAuthService {
   final GoogleSignIn _googleSignIn;
   bool _isGoogleSignInRunning = false;
@@ -44,7 +45,7 @@ class SupabaseAuthService {
     return client.auth.onAuthStateChange;
   }
 
-  /// Sign up with email, password, and display name (preserved for fallback recovery)
+  /// Legacy API kept for source compatibility; the app UI is Google-only.
   Future<sp.AuthResponse> signUp({
     required String email,
     required String password,
@@ -66,7 +67,7 @@ class SupabaseAuthService {
     }
   }
 
-  /// Sign in with email and password (preserved for fallback recovery)
+  /// Legacy API kept for source compatibility; the app UI is Google-only.
   Future<sp.AuthResponse> signIn({
     required String email,
     required String password,
@@ -253,6 +254,89 @@ class SupabaseAuthService {
       throw AuthException(ErrorMapper.mapToUserMessage(e));
     } finally {
       _isGoogleSignInRunning = false;
+    }
+  }
+
+  /// Sends a six-digit PIN-reset OTP to the authenticated Google account's
+  /// verified email address. Account creation is explicitly disabled.
+  Future<void> sendPinResetOtp({required String email}) async {
+    final current = currentUser;
+    final normalizedEmail = email.trim().toLowerCase();
+    if (current == null ||
+        current.email == null ||
+        current.email!.toLowerCase() != normalizedEmail) {
+      throw const AuthException(
+        'The Gmail address does not match the signed-in Privora account.',
+      );
+    }
+
+    try {
+      await _client.auth
+          .signInWithOtp(email: normalizedEmail, shouldCreateUser: false)
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      throw const AuthException(
+        'Sending the Gmail code timed out. Check your connection and retry.',
+      );
+    } on sp.AuthException catch (error) {
+      final message = error.message.toLowerCase();
+      if (message.contains('rate') || message.contains('seconds')) {
+        throw const AuthException(
+          'Please wait one minute before requesting another code.',
+        );
+      }
+      throw AuthException('Could not send the Gmail code: ${error.message}');
+    } catch (error) {
+      debugPrint('sendPinResetOtp error: $error');
+      throw AuthException(ErrorMapper.mapToUserMessage(error));
+    }
+  }
+
+  /// Verifies the six-digit Gmail OTP and guarantees it belongs to the same
+  /// Supabase user whose vault is being reset.
+  Future<sp.AuthResponse> verifyPinResetOtp({
+    required String email,
+    required String token,
+    required String expectedUserId,
+  }) async {
+    if (!RegExp(r'^\d{6}$').hasMatch(token)) {
+      throw const AuthException('Enter the complete 6-digit Gmail code.');
+    }
+
+    try {
+      final response = await _client.auth
+          .verifyOTP(
+            email: email.trim().toLowerCase(),
+            token: token,
+            type: sp.OtpType.email,
+          )
+          .timeout(const Duration(seconds: 20));
+      if (response.user == null || response.user!.id != expectedUserId) {
+        await _client.auth.signOut();
+        throw const AuthException(
+          'The Gmail code belongs to a different account. Sign in again.',
+        );
+      }
+      return response;
+    } on TimeoutException {
+      throw const AuthException(
+        'Checking the Gmail code timed out. Check your connection and retry.',
+      );
+    } on sp.AuthException catch (error) {
+      final message = error.message.toLowerCase();
+      if (message.contains('expired')) {
+        throw const AuthException(
+          'This Gmail code expired. Request a new code.',
+        );
+      }
+      throw const AuthException(
+        'That Gmail code is incorrect. Check the email and try again.',
+      );
+    } on AuthException {
+      rethrow;
+    } catch (error) {
+      debugPrint('verifyPinResetOtp error: $error');
+      throw AuthException(ErrorMapper.mapToUserMessage(error));
     }
   }
 

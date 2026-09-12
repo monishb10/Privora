@@ -58,45 +58,46 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Part 4: Multi-Photo Gallery Selection & Ingestion Tests', () {
-    test(
-      'Sequential batch upload processes files and tracks progress',
-      () async {
-        final cleaner = FakeTemporaryCleaner();
-        final uploadService = MockBatchPhotoUploadService(
-          cryptoService: VaultCryptoService(),
-          databaseService: FakeDatabaseService(),
-          cleaner: cleaner,
+    test('Sequential batch upload processes files and tracks progress', () async {
+      final cleaner = FakeTemporaryCleaner();
+      final uploadService = MockBatchPhotoUploadService(
+        cryptoService: VaultCryptoService(),
+        databaseService: FakeDatabaseService(),
+        cleaner: cleaner,
+      );
+
+      final masterKey = Uint8List(32);
+      final files = [
+        File('test_photo_1.jpg'),
+        File('test_photo_2.jpg'),
+        File('test_photo_3.jpg'),
+      ];
+
+      final progressSteps = <String>[];
+
+      for (int i = 0; i < files.length; i++) {
+        progressSteps.add('Uploading ${i + 1} of ${files.length}');
+        await uploadService.uploadPhoto(
+          sourceFile: files[i],
+          userId: 'user-1',
+          categoryId: 'cat-1',
+          masterKey: masterKey,
         );
+      }
 
-        final masterKey = Uint8List(32);
-        final files = [
-          File('test_photo_1.jpg'),
-          File('test_photo_2.jpg'),
-          File('test_photo_3.jpg'),
-        ];
-
-        final progressSteps = <String>[];
-
-        for (int i = 0; i < files.length; i++) {
-          progressSteps.add('Uploading ${i + 1} of ${files.length}');
-          await uploadService.uploadPhoto(
-            sourceFile: files[i],
-            userId: 'user-1',
-            categoryId: 'cat-1',
-            masterKey: masterKey,
-          );
-          await cleaner.cleanTemporaryFiles();
-        }
-
-        // Verify all 3 files uploaded sequentially
-        expect(uploadService.uploadedIds.length, equals(3));
-        expect(
-          progressSteps,
-          equals(['Uploading 1 of 3', 'Uploading 2 of 3', 'Uploading 3 of 3']),
-        );
-        expect(cleaner.wasCleaned, isTrue);
-      },
-    );
+      // Verify all 3 files uploaded sequentially
+      expect(uploadService.uploadedIds.length, equals(3));
+      expect(
+        progressSteps,
+        equals(['Uploading 1 of 3', 'Uploading 2 of 3', 'Uploading 3 of 3']),
+      );
+      expect(
+        cleaner.wasCleaned,
+        isFalse,
+        reason:
+            'Batch processing must not globally clear temporary files between photos',
+      );
+    });
 
     test(
       'Partial failure does not stop remaining photos, and retry uploads only failed files',

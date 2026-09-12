@@ -12,8 +12,8 @@ enum ImportStage {
   fullImageEncrypted(7, 'Full image encrypted'),
   thumbnailEncrypted(8, 'Thumbnail encrypted'),
   uploadSignatureReceived(9, 'Cloudinary upload signature received'),
-  fullAssetUploaded(10, 'Full encrypted asset uploaded'),
-  thumbnailUploaded(11, 'Encrypted thumbnail uploaded'),
+  fullAssetUploaded(10, 'Encrypted full asset upload'),
+  thumbnailUploaded(11, 'Encrypted thumbnail upload'),
   metadataCommitted(12, 'Supabase photo metadata committed'),
   categoryRefreshed(13, 'Category refreshed'),
   tempFilesCleaned(14, 'Temporary files cleaned');

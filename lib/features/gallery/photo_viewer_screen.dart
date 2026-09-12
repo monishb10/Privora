@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../app/providers.dart';
+import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/confirmation_dialog.dart';
@@ -222,6 +224,29 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                     }
 
                     if (snapshot.hasError || !snapshot.hasData) {
+                      String errorMessage = 'Failed to decrypt photo';
+                      if (snapshot.hasError) {
+                        final err = snapshot.error;
+                        final errStr = err.toString().toLowerCase();
+                        if ((err is StorageException &&
+                                (err.statusCode == 404 ||
+                                    err.code == 'NOT_FOUND')) ||
+                            errStr.contains('could not be found') ||
+                            errStr.contains('404')) {
+                          errorMessage = 'Cloud file could not be found.';
+                        } else if (err is CryptoException ||
+                            errStr.contains('failed to decrypt')) {
+                          errorMessage = 'Failed to decrypt photo';
+                        } else if (err is SocketException ||
+                            errStr.contains('internet') ||
+                            errStr.contains('network') ||
+                            errStr.contains('connection')) {
+                          errorMessage = 'Check your internet connection.';
+                        } else if (err is AppException) {
+                          errorMessage = err.message;
+                        }
+                      }
+
                       return Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -232,10 +257,16 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                               color: AppColors.danger,
                             ),
                             const SizedBox(height: 12),
-                            Text(
-                              'Failed to decrypt photo',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.secondaryText,
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              child: Text(
+                                errorMessage,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.secondaryText,
+                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ],

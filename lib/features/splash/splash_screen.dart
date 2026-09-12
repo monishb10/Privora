@@ -121,15 +121,33 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      // 2. If no local setup on this device, check for cloud recovery record
-      if (serverVault != null &&
-          serverVault['recovery_wrapped_key'] != null &&
-          serverVault['recovery_wrapped_key'].toString().isNotEmpty) {
-        // Returning user on a new device with cloud recovery record -> Recovery flow
-        context.go('/recover-vault');
-      } else {
-        // Fresh user with no existing vault -> Create PIN
+      // 2. Returning users on a new device restore the encrypted server PIN
+      // envelope and enter their existing PIN. This fixes the false
+      // "PIN has not been set" state caused by checking only local storage.
+      final synced = await vaultRepo.syncServerPinEnvelopeIfMissing(
+        user.id,
+        serverVault: serverVault,
+      );
+      if (!mounted) return;
+      if (synced) {
+        context.go('/unlock');
+        return;
+      }
+
+      if (serverVault == null) {
+        // Brand-new Google account.
         context.go('/create-pin');
+      } else {
+        // Never overwrite an older/partial vault. Verify Gmail and reset PIN.
+        context.go('/forgot-pin');
+      }
+    } catch (error) {
+      debugPrint('Startup routing error: $error');
+      if (mounted) {
+        setState(() {
+          _errorMessage =
+              'Privora could not verify this account yet. Check your connection and retry.';
+        });
       }
     } finally {
       if (mounted) {

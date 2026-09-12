@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../constants/app_constants.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'privora_logo.dart';
-import 'privora_wordmark.dart';
 
 /// Mathematically centred Top App Bar for Privora's main authenticated screens.
 /// Features a centred Privora logo and title in Playfair Display Bold,
@@ -91,11 +91,21 @@ class PrivoraBrandAppBar extends StatelessWidget
                     ),
 
                     // Mathematically centred brand title wordmark image
-                    const Center(
+                    Center(
                       child: Padding(
                         // Symmetrical margins preserve perfect center while guarding actions and logo
-                        padding: EdgeInsets.symmetric(horizontal: 104),
-                        child: PrivoraWordmark(height: 26),
+                        padding: const EdgeInsets.symmetric(horizontal: 104),
+                        child: Semantics(
+                          header: true,
+                          label: AppConstants.appName,
+                          child: Image.asset(
+                            'assets/branding/privora_wordmark.png',
+                            key: const Key('privora_brand_wordmark'),
+                            height: 26,
+                            fit: BoxFit.contain,
+                            color: AppColors.primaryText,
+                          ),
+                        ),
                       ),
                     ),
 

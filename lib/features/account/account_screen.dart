@@ -290,14 +290,12 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     );
 
     if (confirmed == true && mounted) {
-      final authRepo = ref.read(authRepositoryProvider);
-      final catRepo = ref.read(categoryRepositoryProvider);
-      catRepo.clearCache();
+      await ref.read(authRepositoryProvider).signOut();
+      ref.read(categoryRepositoryProvider).clearCache();
       ref.invalidate(currentUserProvider);
       ref.invalidate(categoriesProvider);
       ref.invalidate(recentlyDeletedPhotosProvider);
       ref.invalidate(storageUsageProvider);
-      await authRepo.signOut();
       if (mounted) {
         Navigator.of(
           context,
@@ -583,15 +581,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       _buildOptionTile(
                         icon: Icons.shield_outlined,
                         title: 'Security & Privacy',
-                        subtitle: 'Client-side encryption details',
+                        subtitle: 'Encryption and Gmail PIN reset',
                         onTap: () => context.push('/security-settings'),
-                      ),
-                      const Divider(height: 1),
-                      _buildOptionTile(
-                        icon: Icons.vpn_key_outlined,
-                        title: 'Vault Recovery Code',
-                        subtitle: 'View your unique recovery code',
-                        onTap: () => context.push('/recovery-code'),
                       ),
                     ],
                   ),

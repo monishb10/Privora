@@ -60,6 +60,22 @@ class AuthRepository {
     return authService.signInWithGoogle();
   }
 
+  Future<void> sendPinResetOtp(String email) {
+    return authService.sendPinResetOtp(email: email);
+  }
+
+  Future<sp.AuthResponse> verifyPinResetOtp({
+    required String email,
+    required String token,
+    required String expectedUserId,
+  }) {
+    return authService.verifyPinResetOtp(
+      email: email,
+      token: token,
+      expectedUserId: expectedUserId,
+    );
+  }
+
   Future<void> sendPasswordResetEmail(String email) {
     return authService.sendPasswordResetEmail(email);
   }

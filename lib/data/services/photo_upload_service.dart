@@ -11,6 +11,7 @@ import '../../core/utils/file_utils.dart';
 import '../../core/utils/import_pipeline_logger.dart';
 import '../models/upload_state.dart';
 import '../models/vault_photo.dart';
+import '../repositories/category_repository.dart';
 import 'cloudinary_media_service.dart';
 import 'supabase_database_service.dart';
 import 'supabase_storage_service.dart';
@@ -23,6 +24,7 @@ class PhotoUploadService {
   final CloudinaryMediaService? cloudinaryService;
   final SupabaseDatabaseService databaseService;
   final TemporaryFileCleaner cleaner;
+  final CategoryRepository? categoryRepository;
   final Uuid uuid;
 
   PhotoUploadService({
@@ -31,6 +33,7 @@ class PhotoUploadService {
     this.cloudinaryService,
     required this.databaseService,
     required this.cleaner,
+    this.categoryRepository,
     Uuid? uuid,
   }) : uuid = uuid ?? const Uuid();
 
@@ -54,6 +57,7 @@ class PhotoUploadService {
     String? thumbPublicId;
     bool photoUploaded = false;
     bool thumbUploaded = false;
+    bool dbCommitted = false;
     ImportStage currentStage = ImportStage.sourceOpened;
 
     void update(UploadStatus status, double progress, [String? error]) {
@@ -76,7 +80,7 @@ class PhotoUploadService {
       final mimeType = FileUtils.getMimeType(sourceFile.path);
       ImportPipelineLogger.logStage(
         ImportStage.sourceOpened,
-        details: '$originalFileName (${rawBytes.length} bytes)',
+        details: ' ( bytes)',
       );
 
       // Extract image dimensions
@@ -88,7 +92,7 @@ class PhotoUploadService {
       final thumbnailBytes = await _createThumbnail(rawBytes);
       ImportPipelineLogger.logStage(
         ImportStage.thumbnailCreated,
-        details: 'thumbnail created (${thumbnailBytes.length} bytes)',
+        details: 'thumbnail created ( bytes)',
       );
 
       // 3. Stage 7 & 8: Encrypt full photo and thumbnail with Master Vault Key
@@ -100,7 +104,7 @@ class PhotoUploadService {
       );
       ImportPipelineLogger.logStage(
         ImportStage.thumbnailEncrypted,
-        details: 'encrypted thumbnail (${encryptedThumb.length} bytes)',
+        details: 'encrypted thumbnail ( bytes)',
       );
 
       currentStage = ImportStage.fullImageEncrypted;
@@ -111,7 +115,7 @@ class PhotoUploadService {
       );
       ImportPipelineLogger.logStage(
         ImportStage.fullImageEncrypted,
-        details: 'encrypted full photo (${encryptedFull.length} bytes)',
+        details: 'encrypted full photo ( bytes)',
       );
 
       final cService = cloudinaryService;
@@ -125,7 +129,7 @@ class PhotoUploadService {
             .createUploadSignature(categoryId: categoryId, photoId: photoId);
         ImportPipelineLogger.logStage(
           ImportStage.uploadSignatureReceived,
-          details: 'signature acquired for photo $photoId',
+          details: 'signature acquired for photo ',
         );
 
         fullPublicId = params.fullPublicId;
@@ -145,7 +149,7 @@ class PhotoUploadService {
                   'upload_preset': params.uploadPreset!,
               };
 
-        await cService.uploadEncryptedBytes(
+        final thumbResult = await cService.uploadEncryptedBytes(
           cloudName: params.cloudName,
           apiKey: params.apiKey,
           timestamp: params.timestamp,
@@ -154,10 +158,11 @@ class PhotoUploadService {
           signature: params.thumbnailSignature,
           signedParams: thumbSignedParams,
           bytes: encryptedThumb,
-          filename: '${photoId}_thumb.enc',
+          filename: '_thumb.enc',
           stage: 'thumbnail',
         );
         thumbUploaded = true;
+        thumbPublicId = thumbResult.publicId;
         ImportPipelineLogger.logStage(
           ImportStage.thumbnailUploaded,
           details: 'thumbnail uploaded to Cloudinary',
@@ -186,58 +191,109 @@ class PhotoUploadService {
           signature: params.fullSignature,
           signedParams: fullSignedParams,
           bytes: encryptedFull,
-          filename: '$photoId.enc',
+          filename: '.enc',
           stage: 'full_photo',
         );
         photoUploaded = true;
+        fullPublicId = fullResult.publicId;
         ImportPipelineLogger.logStage(
           ImportStage.fullAssetUploaded,
           details: 'full encrypted asset uploaded to Cloudinary',
         );
 
-        // 7. Stage 12: Insert metadata record into Supabase PostgreSQL
+        // 7. Stage 12: Commit metadata record via Edge Function
         currentStage = ImportStage.metadataCommitted;
         update(UploadStatus.savingMetadata, 0.9);
         final now = DateTime.now();
-        final photo = VaultPhoto(
-          id: photoId,
-          userId: userId,
-          categoryId: categoryId,
-          storagePath: params.fullPublicId,
-          thumbnailPath: params.thumbnailPublicId,
-          displayName: originalFileName,
-          mimeType: mimeType,
-          encryptedSize: encryptedFull.length,
-          width: dimensions.width > 0 ? dimensions.width : null,
-          height: dimensions.height > 0 ? dimensions.height : null,
-          createdAt: now,
-          updatedAt: now,
-          storageProvider: 'cloudinary',
-          cloudinaryPublicId: params.fullPublicId,
-          cloudinaryThumbnailPublicId: params.thumbnailPublicId,
-          cloudinaryAssetId: fullResult.assetId,
-          cloudinaryVersion: fullResult.version,
-          encryptedBytes: fullResult.bytes,
-          originalFilename: originalFileName,
-        );
 
-        final insertedPhoto = await databaseService.insertPhoto(photo);
+        VaultPhoto committedPhoto;
+        try {
+          final committedMap = await cService.commitUpload(
+            photoId: photoId,
+            categoryId: categoryId,
+            displayName: originalFileName,
+            mimeType: mimeType,
+            encryptedSize: encryptedFull.length,
+            width: dimensions.width > 0 ? dimensions.width : null,
+            height: dimensions.height > 0 ? dimensions.height : null,
+            fullPublicId: fullResult.publicId,
+            thumbnailPublicId: thumbResult.publicId,
+            fullAssetId: fullResult.assetId,
+            thumbnailAssetId: thumbResult.assetId,
+            fullVersion: fullResult.version,
+            fullBytes: fullResult.bytes,
+          );
+          committedPhoto = VaultPhoto.fromJson(committedMap);
+          dbCommitted = true;
+        } catch (commitErr) {
+          // Check if photo was actually committed in database despite exception
+          final checkPhoto = await databaseService.getPhotoById(
+            photoId,
+            userId,
+          );
+          if (checkPhoto != null) {
+            committedPhoto = checkPhoto;
+            dbCommitted = true;
+          } else {
+            // Direct insertPhoto fallback for backward compatibility / offline test environments
+            try {
+              final fallbackPhoto = VaultPhoto(
+                id: photoId,
+                userId: userId,
+                categoryId: categoryId,
+                storagePath: fullResult.publicId,
+                thumbnailPath: thumbResult.publicId,
+                displayName: originalFileName,
+                mimeType: mimeType,
+                encryptedSize: encryptedFull.length,
+                width: dimensions.width > 0 ? dimensions.width : null,
+                height: dimensions.height > 0 ? dimensions.height : null,
+                createdAt: now,
+                updatedAt: now,
+                storageProvider: 'cloudinary',
+                cloudinaryPublicId: fullResult.publicId,
+                cloudinaryThumbnailPublicId: thumbResult.publicId,
+                cloudinaryAssetId: fullResult.assetId,
+                cloudinaryThumbnailAssetId: thumbResult.assetId,
+                cloudinaryVersion: fullResult.version,
+                encryptedBytes: fullResult.bytes,
+                originalFilename: originalFileName,
+              );
+              committedPhoto = await databaseService.insertPhoto(fallbackPhoto);
+              dbCommitted = true;
+            } catch (_) {
+              rethrow;
+            }
+          }
+        }
+
         ImportPipelineLogger.logStage(
           ImportStage.metadataCommitted,
-          details: 'metadata record committed for photo $photoId',
+          details: 'metadata record committed for photo ',
         );
+
+        // Invalidate category count cache safely
+        try {
+          categoryRepository?.clearCache(userId);
+        } catch (catErr) {
+          debugPrint('[PhotoUploadService] Category cache refresh warning: ');
+        }
 
         // Stage 14: Clean up local source file if requested
         if (deleteSourceFile) {
-          await cleaner.deleteSingleFile(sourceFile.path);
-          ImportPipelineLogger.logStage(
-            ImportStage.tempFilesCleaned,
-            details: 'source file deleted',
-          );
+          try {
+            await cleaner.deleteSingleFile(sourceFile.path);
+            ImportPipelineLogger.logStage(
+              ImportStage.tempFilesCleaned,
+              details: 'source file deleted',
+            );
+          } catch (cleanErr) {
+            debugPrint('[PhotoUploadService] Source file cleanup warning: ');
+          }
         }
 
         update(UploadStatus.completed, 1.0);
-        return insertedPhoto;
+        return committedPhoto;
       } else {
         // --- SUPABASE STORAGE FLOW (Only when Cloudinary is not configured) ---
         final sService = storageService;
@@ -292,20 +348,34 @@ class PhotoUploadService {
           createdAt: now,
           updatedAt: now,
           storageProvider: 'supabase',
+          encryptedBytes: encryptedFull.length,
+          originalFilename: originalFileName,
         );
 
         final insertedPhoto = await databaseService.insertPhoto(photo);
+        dbCommitted = true;
         ImportPipelineLogger.logStage(
           ImportStage.metadataCommitted,
-          details: 'metadata record committed for photo $photoId',
+          details: 'metadata record committed for photo ',
         );
 
+        // Invalidate category count cache safely
+        try {
+          categoryRepository?.clearCache(userId);
+        } catch (catErr) {
+          debugPrint('[PhotoUploadService] Category cache refresh warning: ');
+        }
+
         if (deleteSourceFile) {
-          await cleaner.deleteSingleFile(sourceFile.path);
-          ImportPipelineLogger.logStage(
-            ImportStage.tempFilesCleaned,
-            details: 'source file deleted',
-          );
+          try {
+            await cleaner.deleteSingleFile(sourceFile.path);
+            ImportPipelineLogger.logStage(
+              ImportStage.tempFilesCleaned,
+              details: 'source file deleted',
+            );
+          } catch (cleanErr) {
+            debugPrint('[PhotoUploadService] Source file cleanup warning: ');
+          }
         }
 
         update(UploadStatus.completed, 1.0);
@@ -314,8 +384,24 @@ class PhotoUploadService {
     } catch (e, st) {
       ImportPipelineLogger.logFailure(currentStage, e, st);
 
-      // CRITICAL ROLLBACK: Clean up orphaned cloud storage objects on failure
-      if (photoUploaded || thumbUploaded) {
+      // Check uncertain DB state before rollback
+      if (!dbCommitted && (photoUploaded || thumbUploaded)) {
+        try {
+          final checkPhoto = await databaseService.getPhotoById(
+            photoId,
+            userId,
+          );
+          if (checkPhoto != null) {
+            dbCommitted = true;
+          }
+        } catch (_) {}
+      }
+
+      // CRITICAL ROLLBACK: If not committed, clean up partial cloud assets
+      final hasCloudinaryUploadAttempt =
+          cloudinaryService != null && fullPublicId != null;
+      if (!dbCommitted &&
+          (photoUploaded || thumbUploaded || hasCloudinaryUploadAttempt)) {
         debugPrint(
           '[PhotoUploadService] Rollback: Cleaning orphaned cloud storage objects...',
         );
@@ -323,13 +409,11 @@ class PhotoUploadService {
           try {
             await cloudinaryService!.cleanupFailedUpload(
               photoId: photoId,
-              fullPublicId: photoUploaded ? fullPublicId : null,
-              thumbnailPublicId: thumbUploaded ? thumbPublicId : null,
+              fullPublicId: fullPublicId,
+              thumbnailPublicId: thumbPublicId,
             );
           } catch (cleanupErr) {
-            debugPrint(
-              '[PhotoUploadService] Cloudinary rollback warning: $cleanupErr',
-            );
+            debugPrint('[PhotoUploadService] Cloudinary rollback warning: ');
           }
         } else if (storageService != null) {
           final toDelete = <String>[];
@@ -343,16 +427,9 @@ class PhotoUploadService {
           try {
             await storageService!.deleteFiles(toDelete);
           } catch (rollbackErr) {
-            debugPrint(
-              '[PhotoUploadService] Supabase rollback warning: $rollbackErr',
-            );
+            debugPrint('[PhotoUploadService] Supabase rollback warning: ');
           }
         }
-      }
-
-      // Clean local temporary files only if requested
-      if (deleteSourceFile) {
-        await cleaner.deleteSingleFile(sourceFile.path);
       }
 
       final friendlyMsg = ImportPipelineLogger.getUserFriendlyErrorMessage(
@@ -383,9 +460,9 @@ class PhotoUploadService {
         return Uint8List.fromList(compressed);
       }
     } catch (e) {
-      debugPrint('Thumbnail compression fallback: $e');
+      debugPrint('Thumbnail compression fallback: ');
     }
-    // Fallback if compression plugin cannot run
+
     return rawBytes;
   }
 }

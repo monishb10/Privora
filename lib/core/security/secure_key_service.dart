@@ -39,6 +39,7 @@ class SecureKeyService {
       _storage.delete(key: StorageConstants.securePinWrappedMasterKey),
       _storage.delete(key: StorageConstants.securePinKekNonce),
       _storage.delete(key: StorageConstants.secureHasCompletedSetup),
+      _storage.delete(key: StorageConstants.secureOtpBackupConfigured),
       _storage.delete(key: StorageConstants.secureRecoveryCode),
       _storage.delete(key: StorageConstants.secureFailedPinAttempts),
       _storage.delete(key: StorageConstants.secureLockoutUntil),
@@ -108,10 +109,17 @@ class SecureKeyService {
   }
 
   Future<bool> hasCompletedSetup([String? userId]) async {
-    final val = await _storage.read(
-      key: _key(StorageConstants.secureHasCompletedSetup, userId),
-    );
-    return val == 'true';
+    final values = await Future.wait([
+      _storage.read(
+        key: _key(StorageConstants.secureHasCompletedSetup, userId),
+      ),
+      getPinSalt(userId),
+      getPinVerifier(userId),
+      getWrappedMasterKey(userId),
+      getKekNonce(userId),
+    ]);
+    return values[0] == 'true' &&
+        values.skip(1).every((value) => value != null && value.isNotEmpty);
   }
 
   Future<int> getFailedAttempts([String? userId]) async {
@@ -160,23 +168,34 @@ class SecureKeyService {
     ]);
   }
 
-  Future<void> saveRecoveryCode(String userId, String code) async {
-    await _storage.write(
-      key: _key(StorageConstants.secureRecoveryCode, userId),
-      value: code,
-    );
-  }
-
-  Future<String?> getRecoveryCode(String userId) async {
+  /// Reads a deprecated local migration secret from older builds. New builds
+  /// never generate or display this value, and delete it after migration.
+  Future<String?> getLegacyMigrationSecret(String userId) async {
     return _storage.read(
       key: _key(StorageConstants.secureRecoveryCode, userId),
     );
   }
 
-  Future<void> deleteRecoveryCode(String userId) async {
+  Future<void> deleteLegacyMigrationSecret(String userId) async {
     await _storage.delete(
       key: _key(StorageConstants.secureRecoveryCode, userId),
     );
+  }
+
+  Future<bool> hasOtpBackupConfigured(String userId) async {
+    return await _storage.read(
+          key: _key(StorageConstants.secureOtpBackupConfigured, userId),
+        ) ==
+        'true';
+  }
+
+  Future<void> setOtpBackupConfigured(String userId, bool value) async {
+    final key = _key(StorageConstants.secureOtpBackupConfigured, userId);
+    if (value) {
+      await _storage.write(key: key, value: 'true');
+    } else {
+      await _storage.delete(key: key);
+    }
   }
 
   /// Deletes encrypted credentials and PIN verifier for a specific user ID
@@ -190,6 +209,9 @@ class SecureKeyService {
       _storage.delete(key: _key(StorageConstants.securePinKekNonce, userId)),
       _storage.delete(
         key: _key(StorageConstants.secureHasCompletedSetup, userId),
+      ),
+      _storage.delete(
+        key: _key(StorageConstants.secureOtpBackupConfigured, userId),
       ),
       _storage.delete(key: _key(StorageConstants.secureRecoveryCode, userId)),
       _storage.delete(

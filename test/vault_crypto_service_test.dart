@@ -76,48 +76,5 @@ void main() {
         throwsA(isA<CryptoException>()),
       );
     });
-
-    test(
-      'recovery code generation, key wrapping, and unwrapping round trip',
-      () async {
-        final masterKey = crypto.generateMasterKey();
-        final recoveryCode = crypto.generateRecoveryCode();
-        expect(recoveryCode.startsWith('PRIV-'), isTrue);
-
-        final salt = crypto.generateSalt();
-        final recoveryKek = await crypto.deriveKeyFromRecoveryCode(
-          recoveryCode,
-          salt,
-        );
-
-        // Wrap master key
-        final wrapped = await crypto.wrapMasterKey(masterKey, recoveryKek);
-        expect(wrapped['wrappedKey'], isNotEmpty);
-        expect(wrapped['nonce'], isNotEmpty);
-
-        // Unwrap master key with same code
-        final unwrapped = await crypto.unwrapMasterKey(
-          wrappedKeyBase64: wrapped['wrappedKey']!,
-          nonceBase64: wrapped['nonce']!,
-          wrappingKey: recoveryKek,
-        );
-
-        expect(unwrapped, equals(masterKey));
-
-        // Attempt unwrap with wrong recovery code fails
-        final wrongCodeKek = await crypto.deriveKeyFromRecoveryCode(
-          'PRIV-0000-0000-0000-0000',
-          salt,
-        );
-        expect(
-          () => crypto.unwrapMasterKey(
-            wrappedKeyBase64: wrapped['wrappedKey']!,
-            nonceBase64: wrapped['nonce']!,
-            wrappingKey: wrongCodeKek,
-          ),
-          throwsA(isA<CryptoException>()),
-        );
-      },
-    );
   });
 }

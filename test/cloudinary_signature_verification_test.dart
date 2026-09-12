@@ -40,6 +40,8 @@ class MockCloudinaryHttpClient extends http.BaseClient {
   String responseBody = jsonEncode({
     'public_id': 'test-pub-id',
     'asset_id': 'test-asset-id',
+    'resource_type': 'raw',
+    'type': 'authenticated',
     'version': 1,
     'bytes': 1024,
   });
@@ -67,6 +69,9 @@ class MockCloudinaryHttpClient extends http.BaseClient {
 class FakeDbForRollback extends Fake implements SupabaseDatabaseService {
   @override
   Future<VaultPhoto> insertPhoto(VaultPhoto photo) async => photo;
+
+  @override
+  Future<VaultPhoto?> getPhotoById(String photoId, String userId) async => null;
 }
 
 void main() {
@@ -77,6 +82,25 @@ void main() {
     const apiKey = 'test_key_xyz789';
     const cloudName = 'test_cloud';
     const uploadPreset = 'privora_signed';
+
+    test('Upload timeout scales safely for mobile connections', () {
+      expect(
+        CloudinaryMediaService.uploadTimeoutForByteLength(0),
+        CloudinaryMediaService.minimumUploadTimeout,
+      );
+      expect(
+        CloudinaryMediaService.uploadTimeoutForByteLength(5 * 1024 * 1024),
+        CloudinaryMediaService.minimumUploadTimeout,
+      );
+      expect(
+        CloudinaryMediaService.uploadTimeoutForByteLength(50 * 1024 * 1024),
+        const Duration(seconds: 860),
+      );
+      expect(
+        CloudinaryMediaService.uploadTimeoutForByteLength(1024 * 1024 * 1024),
+        CloudinaryMediaService.maximumUploadTimeout,
+      );
+    });
 
     // -------------------------------------------------------------------------
     // 1. Full and thumbnail signatures are independent

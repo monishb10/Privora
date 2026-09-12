@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/google_icon.dart';
 import '../../core/widgets/privora_button.dart';
 import '../../core/widgets/privora_logo.dart';
-import '../../core/widgets/privora_wordmark.dart';
 
 /// Clean Google-only Authentication Screen for Privora.
 /// Replaces visible email/password inputs with a single "Continue with Google" action,
@@ -70,21 +70,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
 
       if (hasLocalKeys) {
-        // User already has PIN setup on this device -> Unlock with 6-digit PIN
+        // Returning user on this device.
         context.go('/unlock');
       } else {
-        // No local keys on this device: check if user has a cloud recovery record
-        final serverVault = await vaultRepo.getServerVaultData(user.id);
+        // A returning user on a new device receives the encrypted PIN envelope
+        // from Supabase, then unlocks it using the same six-digit PIN.
+        final synced = await vaultRepo.syncServerPinEnvelopeIfMissing(user.id);
         if (!mounted) return;
 
-        if (serverVault != null &&
-            serverVault['recovery_wrapped_key'] != null &&
-            serverVault['recovery_wrapped_key'].toString().isNotEmpty) {
-          // Returning user on new device with existing recovery envelope -> Vault recovery flow
-          context.go('/recover-vault');
+        if (synced) {
+          context.go('/unlock');
         } else {
-          // Fresh user with no existing vault -> Setup 6-digit PIN
-          context.go('/create-pin');
+          final serverVault = await vaultRepo.getServerVaultData(user.id);
+          if (!mounted) return;
+          if (serverVault == null) {
+            context.go('/create-pin');
+          } else {
+            // An older or partially migrated vault must never be overwritten.
+            // Gmail OTP is the only reset path in the current application.
+            context.go('/forgot-pin');
+          }
         }
       }
     } catch (e) {
@@ -142,12 +147,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // App Title (Brand Wordmark with matching stylization)
-                  const PrivoraWordmark(
-                    height: 38,
-                    wordmarkKey: Key('privora_brand_wordmark'),
+                  // App Title
+                  const Text(
+                    AppConstants.appName,
+                    style: AppTypography.displayLarge,
+                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
 
                   // Subtitle
                   Text(

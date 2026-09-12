@@ -16,14 +16,13 @@ class MockVaultRepository extends Fake implements VaultRepository {
   String? initializedPin;
 
   @override
-  Future<String> initializeNewVault({
+  Future<void> initializeNewVault({
     required String userId,
     required String pin,
   }) async {
     initializeNewVaultCalled = true;
     initializedUserId = userId;
     initializedPin = pin;
-    return 'mock-recovery-key-12345';
   }
 }
 

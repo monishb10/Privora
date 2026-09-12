@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/widgets/privora_floating_nav_bar.dart';
 import '../data/models/vault_category.dart';
 import '../features/account/account_screen.dart';
-import '../features/account/recovery_code_screen.dart';
 import '../features/account/security_settings_screen.dart';
 import '../features/account/storage_usage_screen.dart';
 import '../features/auth/login_screen.dart';
@@ -16,7 +15,7 @@ import '../features/categories/category_detail_screen.dart';
 import '../features/pin/change_pin_screen.dart';
 import '../features/pin/confirm_pin_screen.dart';
 import '../features/pin/create_pin_screen.dart';
-import '../features/pin/recover_vault_screen.dart';
+import '../features/pin/forgot_pin_otp_screen.dart';
 import '../features/pin/unlock_screen.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/trash/recently_deleted_screen.dart';
@@ -103,8 +102,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ChangePinScreen(),
       ),
       GoRoute(
-        path: '/recover-vault',
-        builder: (context, state) => const RecoverVaultScreen(),
+        path: '/forgot-pin',
+        builder: (context, state) => const ForgotPinOtpScreen(),
       ),
       GoRoute(
         path: '/category/:id',
@@ -121,11 +120,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/security-settings',
         builder: (context, state) => const SecuritySettingsScreen(),
       ),
-      GoRoute(
-        path: '/recovery-code',
-        builder: (context, state) => const RecoveryCodeScreen(),
-      ),
-
       // Bottom Navigation Shell for main screens
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

@@ -25,8 +25,11 @@ class VaultPhoto {
   /// Cloudinary public identifier for thumbnail (privora/{userId}/{categoryId}/{photoId}_thumb)
   final String? cloudinaryThumbnailPublicId;
 
-  /// Cloudinary internal asset UUID
+  /// Cloudinary internal asset UUID for full photo
   final String? cloudinaryAssetId;
+
+  /// Cloudinary internal asset UUID for thumbnail
+  final String? cloudinaryThumbnailAssetId;
 
   /// Cloudinary asset version string
   final String? cloudinaryVersion;
@@ -56,6 +59,7 @@ class VaultPhoto {
     this.cloudinaryPublicId,
     this.cloudinaryThumbnailPublicId,
     this.cloudinaryAssetId,
+    this.cloudinaryThumbnailAssetId,
     this.cloudinaryVersion,
     this.encryptedBytes,
     this.originalFilename,
@@ -127,6 +131,8 @@ class VaultPhoto {
       cloudinaryPublicId: cPubId ?? (isCloud ? rawStoragePath : null),
       cloudinaryThumbnailPublicId: cThumbId ?? (isCloud ? rawThumbPath : null),
       cloudinaryAssetId: json['cloudinary_asset_id'] as String?,
+      cloudinaryThumbnailAssetId:
+          json['cloudinary_thumbnail_asset_id'] as String?,
       cloudinaryVersion: json['cloudinary_version']?.toString(),
       encryptedBytes: json['encrypted_bytes'] as int?,
       originalFilename:
@@ -159,7 +165,7 @@ class VaultPhoto {
     };
   }
 
-  /// Extended schema serialization including optional migration 003 columns
+  /// Extended schema serialization including optional migration 003 and 006 columns
   Map<String, dynamic> toExtendedJson() {
     final base = toBaseJson();
     return {
@@ -170,6 +176,8 @@ class VaultPhoto {
       if (cloudinaryThumbnailPublicId != null)
         'cloudinary_thumbnail_public_id': cloudinaryThumbnailPublicId,
       if (cloudinaryAssetId != null) 'cloudinary_asset_id': cloudinaryAssetId,
+      if (cloudinaryThumbnailAssetId != null)
+        'cloudinary_thumbnail_asset_id': cloudinaryThumbnailAssetId,
       if (cloudinaryVersion != null) 'cloudinary_version': cloudinaryVersion,
       if (encryptedBytes != null) 'encrypted_bytes': encryptedBytes,
       if (originalFilename != null) 'original_filename': originalFilename,
@@ -197,6 +205,7 @@ class VaultPhoto {
     String? cloudinaryPublicId,
     String? cloudinaryThumbnailPublicId,
     String? cloudinaryAssetId,
+    String? cloudinaryThumbnailAssetId,
     String? cloudinaryVersion,
     int? encryptedBytes,
     String? originalFilename,
@@ -221,6 +230,8 @@ class VaultPhoto {
       cloudinaryThumbnailPublicId:
           cloudinaryThumbnailPublicId ?? this.cloudinaryThumbnailPublicId,
       cloudinaryAssetId: cloudinaryAssetId ?? this.cloudinaryAssetId,
+      cloudinaryThumbnailAssetId:
+          cloudinaryThumbnailAssetId ?? this.cloudinaryThumbnailAssetId,
       cloudinaryVersion: cloudinaryVersion ?? this.cloudinaryVersion,
       encryptedBytes: encryptedBytes ?? this.encryptedBytes,
       originalFilename: originalFilename ?? this.originalFilename,

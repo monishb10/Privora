@@ -159,8 +159,8 @@ class PinService {
     _activeUserId = null;
   }
 
-  /// Restores master key from recovery flow and sets a new PIN
-  Future<void> recoverAndSetPin({
+  /// Re-wraps an already authenticated master key under a new PIN.
+  Future<void> setPinWithMasterKey({
     required Uint8List masterKey,
     required String newPin,
     String? userId,

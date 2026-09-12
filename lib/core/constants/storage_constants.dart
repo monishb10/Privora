@@ -14,6 +14,9 @@ class StorageConstants {
   static const String secureFailedPinAttempts = 'privora_failed_pin_attempts';
   static const String secureLockoutUntil = 'privora_lockout_until';
   static const String secureHasCompletedSetup = 'privora_has_completed_setup';
+  static const String secureOtpBackupConfigured =
+      'privora_otp_backup_configured';
+  // Read only while upgrading older installations, then permanently deleted.
   static const String secureRecoveryCode = 'privora_recovery_code';
 
   // Supabase Database Table Names

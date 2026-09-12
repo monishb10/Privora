@@ -185,14 +185,12 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
       icon: Icons.logout_rounded,
     );
     if (confirmed == true && mounted) {
-      final authRepo = ref.read(authRepositoryProvider);
-      final catRepo = ref.read(categoryRepositoryProvider);
-      catRepo.clearCache();
+      await ref.read(authRepositoryProvider).signOut();
+      ref.read(categoryRepositoryProvider).clearCache();
       ref.invalidate(currentUserProvider);
       ref.invalidate(categoriesProvider);
       ref.invalidate(recentlyDeletedPhotosProvider);
       ref.invalidate(storageUsageProvider);
-      await authRepo.signOut();
       if (mounted) {
         context.go('/login');
       }
@@ -228,7 +226,6 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                             vertical: 8,
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               TextButton.icon(
                                 icon: const Icon(
@@ -241,14 +238,6 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                                   minimumSize: const Size(48, 48),
                                 ),
                                 onPressed: _handleBackToLogin,
-                              ),
-                              TextButton(
-                                onPressed: () => context.push('/recover-vault'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.secondaryTextColor,
-                                  minimumSize: const Size(48, 48),
-                                ),
-                                child: const Text('Forgot PIN?'),
                               ),
                             ],
                           ),
@@ -332,9 +321,9 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                           onPressed:
                               (_lockoutSecondsRemaining > 0 || _isVerifying)
                               ? null
-                              : () => context.push('/recover-vault'),
+                              : () => context.push('/forgot-pin'),
                           child: Text(
-                            'Forgot PIN? Use recovery code',
+                            'Forgot PIN? Reset with Gmail code',
                             style: AppTypography.labelMedium.copyWith(
                               color: AppColors.primaryActionBlue,
                               fontWeight: FontWeight.w600,

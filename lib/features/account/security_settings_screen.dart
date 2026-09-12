@@ -1,181 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../app/providers.dart';
-import '../../core/config/supabase_config.dart';
-import '../../core/errors/error_mapper.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/utils/validators.dart';
-import 'widgets/recovery_code_modal.dart';
 
-/// Screen detailing Privora's security architecture and privacy controls,
-/// including interactive recovery code generation and management.
-class SecuritySettingsScreen extends ConsumerStatefulWidget {
+/// Readable security summary. User-managed recovery codes have been removed;
+/// forgotten PINs are reset only after verification through the signed-in
+/// Google account's Gmail address.
+class SecuritySettingsScreen extends StatelessWidget {
   const SecuritySettingsScreen({super.key});
 
-  @override
-  ConsumerState<SecuritySettingsScreen> createState() =>
-      _SecuritySettingsScreenState();
-}
-
-class _SecuritySettingsScreenState
-    extends ConsumerState<SecuritySettingsScreen> {
-  bool _isLoadingRecoveryStatus = true;
-  bool _hasRecoveryCode = false;
-  String? _currentRecoveryCode;
-  bool _isRecoveryCodeObscured = true;
-  bool _isActionInProgress = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRecoveryStatus();
-  }
-
-  Future<void> _loadRecoveryStatus() async {
-    final user =
-        ref.read(currentUserProvider) ??
-        SupabaseConfig.client?.auth.currentUser;
-    if (user != null) {
-      final vaultRepo = ref.read(vaultRepositoryProvider);
-      final hasCode = await vaultRepo.hasRecoveryCode(user.id);
-      final code = await vaultRepo.getRecoveryCode(user.id);
-      if (mounted) {
-        setState(() {
-          _hasRecoveryCode = hasCode || (code != null && code.isNotEmpty);
-          _currentRecoveryCode = code;
-          _isLoadingRecoveryStatus = false;
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() {
-          _isLoadingRecoveryStatus = false;
-        });
-      }
-    }
-  }
-
-  Future<String?> _promptCurrentPin() async {
-    final pinController = TextEditingController();
-    String? localError;
-
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: const Text(
-                'Confirm Your PIN',
-                style: AppTypography.titleLarge,
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Enter your current 6-digit PIN to authorize recovery code generation.',
-                    style: AppTypography.bodySmall,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: pinController,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    obscureText: true,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: '6-Digit PIN',
-                      errorText: localError,
-                      counterText: '',
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(null),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final entered = pinController.text.trim();
-                    if (!Validators.isSixDigitPin(entered)) {
-                      setDialogState(() {
-                        localError = 'Enter a valid 6-digit PIN';
-                      });
-                      return;
-                    }
-                    Navigator.of(dialogContext).pop(entered);
-                  },
-                  child: const Text('Confirm'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _handleGenerateOrReplaceRecoveryCode() async {
-    if (_isActionInProgress) return;
-
-    final pin = await _promptCurrentPin();
-    if (pin == null || !mounted) return;
-
-    setState(() => _isActionInProgress = true);
-
-    try {
-      final user =
-          ref.read(currentUserProvider) ??
-          SupabaseConfig.client?.auth.currentUser;
-      if (user == null) {
-        throw Exception('User session not found. Please log in again.');
-      }
-
-      final vaultRepo = ref.read(vaultRepositoryProvider);
-      final recoveryCode = await vaultRepo.generateOrReplaceRecoveryCode(
-        userId: user.id,
-        currentPin: pin,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _hasRecoveryCode = true;
-        _currentRecoveryCode = recoveryCode;
-        _isRecoveryCodeObscured = true;
-        _isActionInProgress = false;
-      });
-
-      await RecoveryCodeModal.show(context, recoveryCode);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isActionInProgress = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ErrorMapper.mapToUserMessage(e)),
-          backgroundColor: AppColors.errorDestructive,
-        ),
-      );
-    }
-  }
-
-  Widget _buildSecurityCard({
+  Widget _securityCard({
     required IconData icon,
     required String title,
     required String description,
     required String status,
     Color statusColor = AppColors.success,
-    Widget? trailingAction,
+    Widget? action,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -184,11 +25,17 @@ class _SecuritySettingsScreenState
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fixed size icon container
           Container(
             width: 42,
             height: 42,
@@ -206,17 +53,13 @@ class _SecuritySettingsScreenState
               children: [
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isNarrow =
-                        constraints.maxWidth < 220 ||
-                        MediaQuery.textScalerOf(context).scale(14) > 17;
-
-                    final badgeWidget = Container(
+                    final badge = Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.15),
+                        color: statusColor.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -228,40 +71,34 @@ class _SecuritySettingsScreenState
                       ),
                     );
 
-                    if (isNarrow) {
+                    final textScale = MediaQuery.textScalerOf(
+                      context,
+                    ).scale(1.0);
+                    if (constraints.maxWidth < 230 || textScale > 1.4) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(title, style: AppTypography.titleMedium),
                           const SizedBox(height: 6),
-                          badgeWidget,
+                          badge,
                         ],
                       );
                     }
-
                     return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(title, style: AppTypography.titleMedium),
                         ),
                         const SizedBox(width: 8),
-                        badgeWidget,
+                        badge,
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  description,
-                  style: AppTypography.bodySmall,
-                  softWrap: true,
-                ),
-                if (trailingAction != null) ...[
-                  const SizedBox(height: 12),
-                  trailingAction,
-                ],
+                Text(description, style: AppTypography.bodySmall),
+                if (action != null) ...[const SizedBox(height: 12), action],
               ],
             ),
           ),
@@ -273,239 +110,99 @@ class _SecuritySettingsScreenState
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Security & Privacy'),
-        leading: SizedBox(
-          width: 48,
-          height: 48,
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-            tooltip: 'Back',
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/account');
-              }
-            },
-          ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          tooltip: 'Back',
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/account'),
         ),
       ),
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottomPadding),
           children: [
-            // Interactive Recovery Code Card
-            _buildSecurityCard(
-              icon: Icons.vpn_key_rounded,
-              title: 'Recovery Code',
-              description: _hasRecoveryCode
-                  ? 'Your unique recovery code is active. Use it strictly to change your PIN or recover your vault if you ever forget your PIN.'
-                  : 'Optional backup code to regain vault access if you ever forget your PIN. Store it securely offline.',
-              status: _isLoadingRecoveryStatus
-                  ? 'Checking...'
-                  : (_hasRecoveryCode
-                        ? 'Recovery code ready'
-                        : 'Not generated'),
-              statusColor: _hasRecoveryCode
-                  ? AppColors.success
-                  : AppColors.secondaryTextColor,
-              trailingAction: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_currentRecoveryCode != null &&
-                      _currentRecoveryCode!.isNotEmpty) ...[
-                    Container(
-                      margin: const EdgeInsets.only(top: 4, bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.elevatedSurface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _isRecoveryCodeObscured
-                                  ? (_currentRecoveryCode!.startsWith('PRIV-')
-                                        ? 'PRIV-••••-••••-••••-••••'
-                                        : '••••-••••-••••-••••')
-                                  : _currentRecoveryCode!,
-                              style: AppTypography.labelMedium.copyWith(
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              _isRecoveryCodeObscured
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                              size: 18,
-                              color: AppColors.primaryActionBlue,
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isRecoveryCodeObscured =
-                                    !_isRecoveryCodeObscured;
-                              });
-                            },
-                            tooltip: _isRecoveryCodeObscured
-                                ? 'Reveal'
-                                : 'Hide',
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.copy_rounded,
-                              size: 18,
-                              color: AppColors.primaryActionBlue,
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                            onPressed: () {
-                              Clipboard.setData(
-                                ClipboardData(text: _currentRecoveryCode!),
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Recovery code copied to clipboard',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                            tooltip: 'Copy',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _isActionInProgress
-                            ? null
-                            : _handleGenerateOrReplaceRecoveryCode,
-                        icon: Icon(
-                          _hasRecoveryCode
-                              ? Icons.sync_rounded
-                              : Icons.add_moderator_rounded,
-                          size: 15,
-                          color: AppColors.primaryActionBlue,
-                        ),
-                        label: Text(
-                          _hasRecoveryCode
-                              ? 'Replace recovery code'
-                              : 'Generate recovery code',
-                          style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.primaryActionBlue,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          side: const BorderSide(
-                            color: AppColors.primaryActionBlue,
-                            width: 1.1,
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => context.push('/recovery-code'),
-                        icon: const Icon(
-                          Icons.open_in_new_rounded,
-                          size: 15,
-                          color: AppColors.primaryActionBlue,
-                        ),
-                        label: Text(
-                          'View full page',
-                          style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.primaryActionBlue,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                        ),
-                      ),
-                    ],
+            PrivoraFadeIn(
+              child: _securityCard(
+                icon: Icons.mark_email_read_outlined,
+                title: 'Gmail PIN Reset',
+                description:
+                    'If you forget your PIN, Privora sends a one-time 6-digit code only to the Gmail address connected to this vault.',
+                status: 'OTP Protected',
+                action: Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push('/forgot-pin'),
+                    icon: const Icon(Icons.password_rounded, size: 18),
+                    label: const Text('Reset PIN with Gmail'),
                   ),
-                ],
+                ),
               ),
             ),
-
-            _buildSecurityCard(
-              icon: Icons.enhanced_encryption_rounded,
-              title: 'End-to-End Encryption',
-              description:
-                  'All photos and previews are encrypted with AES-256-GCM before uploading to cloud storage.',
-              status: 'AES-256-GCM',
+            PrivoraFadeIn(
+              delay: const Duration(milliseconds: 40),
+              child: _securityCard(
+                icon: Icons.enhanced_encryption_rounded,
+                title: 'On-Device Encryption',
+                description:
+                    'Photos and previews are encrypted with AES-256-GCM before they are uploaded to Cloudinary.',
+                status: 'AES-256-GCM',
+              ),
             ),
-            _buildSecurityCard(
-              icon: Icons.key_rounded,
-              title: 'Key Derivation',
-              description:
-                  'Master keys and PIN verifiers are derived using PBKDF2 with HMAC-SHA256 and 100,000 iterations.',
-              status: 'PBKDF2',
+            PrivoraFadeIn(
+              delay: const Duration(milliseconds: 80),
+              child: _securityCard(
+                icon: Icons.key_rounded,
+                title: 'PIN Key Derivation',
+                description:
+                    'The vault key and PIN verifier are protected using PBKDF2 with HMAC-SHA256 and 100,000 iterations.',
+                status: 'PBKDF2',
+              ),
             ),
-            _buildSecurityCard(
-              icon: Icons.screen_lock_portrait_rounded,
-              title: 'Screenshot Blocking',
-              description:
-                  'Android FLAG_SECURE prevents screenshots, screen recording, and masks recent app switchers.',
-              status: 'Enforced',
+            PrivoraFadeIn(
+              delay: const Duration(milliseconds: 120),
+              child: _securityCard(
+                icon: Icons.cloud_done_outlined,
+                title: 'Encrypted Reset Backup',
+                description:
+                    'A server-encrypted copy of the vault key allows the original photos to remain readable after a verified Gmail PIN reset.',
+                status: 'Private',
+              ),
             ),
-            _buildSecurityCard(
-              icon: Icons.fingerprint_rounded,
-              title: 'Biometrics Disabled',
-              description:
-                  'Biometric unlock is strictly disabled by design to eliminate biometric coercion vectors.',
-              status: 'PIN Only',
-              statusColor: AppColors.primaryAccent,
+            PrivoraFadeIn(
+              delay: const Duration(milliseconds: 160),
+              child: _securityCard(
+                icon: Icons.screen_lock_portrait_rounded,
+                title: 'Screenshot Blocking',
+                description:
+                    'Android secure-window protection blocks screenshots, screen recording, and recent-app previews.',
+                status: 'Enforced',
+              ),
             ),
-            _buildSecurityCard(
-              icon: Icons.memory_rounded,
-              title: 'RAM-Only Decryption',
-              description:
-                  'Decrypted images exist solely in memory. Decrypted caches are wiped whenever the app locks.',
-              status: 'Zero Disk',
+            PrivoraFadeIn(
+              delay: const Duration(milliseconds: 200),
+              child: _securityCard(
+                icon: Icons.memory_rounded,
+                title: 'RAM-Only Decryption',
+                description:
+                    'Decrypted images are kept in memory and temporary data is cleared when the vault locks.',
+                status: 'Zero Gallery',
+              ),
             ),
-            _buildSecurityCard(
-              icon: Icons.timer_outlined,
-              title: 'Anti-Bruteforce Lockout',
-              description:
-                  'Progressive time delay penalties are enforced after 5 consecutive incorrect PIN entries.',
-              status: 'Active',
+            PrivoraFadeIn(
+              delay: const Duration(milliseconds: 240),
+              child: _securityCard(
+                icon: Icons.timer_outlined,
+                title: 'Attempt Lockout',
+                description:
+                    'Progressive delays are enforced after repeated incorrect PIN attempts.',
+                status: 'Active',
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 2),
             ListTile(
               tileColor: AppColors.surface,
               shape: RoundedRectangleBorder(
@@ -520,14 +217,10 @@ class _SecuritySettingsScreenState
                 'Change 6-Digit PIN',
                 style: AppTypography.bodyLarge,
               ),
-              trailing: const Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 14,
-                color: AppColors.secondaryText,
-              ),
+              subtitle: const Text('Use your current PIN to choose a new one.'),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
               onTap: () => context.push('/change-pin'),
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
   PendingImportContext? _importContext;
   bool _isUploading = false;
   bool _isComplete = false;
+  bool _isClosing = false;
   int _successCount = 0;
   int _currentUploadIndex = 0;
   int _totalBatchCount = 0;
@@ -165,7 +167,6 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
     });
 
     final uploadService = ref.read(photoUploadServiceProvider);
-    final cleaner = ref.read(temporaryFileCleanerProvider);
     final importService = ref.read(galleryImportServiceProvider);
     final sessionLockNotifier = ref.read(sessionLockServiceProvider.notifier);
 
@@ -203,8 +204,6 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
         debugPrint('[ImportPhotoScreen] Upload error for ${file.path}: $e');
         newlyFailed.add(file);
         lastFailureMessage = e is AppException ? e.message : e.toString();
-      } finally {
-        await cleaner.cleanTemporaryFiles();
       }
     }
 
@@ -238,10 +237,25 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
     });
   }
 
+  Future<void> _closeImport() async {
+    if (_isUploading || _isClosing) return;
+    _isClosing = true;
+
+    final requestId = _importContext?.requestId;
+    if (requestId != null) {
+      await ref.read(galleryImportServiceProvider).cleanupRequest(requestId);
+      ref.read(sessionLockServiceProvider.notifier).clearPendingImportContext();
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop(_successCount > 0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_isUploading,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_isUploading) {
@@ -250,6 +264,8 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
               content: Text('Upload in progress. Please wait for completion.'),
             ),
           );
+        } else {
+          unawaited(_closeImport());
         }
       },
       child: Scaffold(
@@ -262,9 +278,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
             child: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
               tooltip: 'Back',
-              onPressed: _isUploading
-                  ? null
-                  : () => Navigator.of(context).pop(_successCount > 0),
+              onPressed: _isUploading ? null : () => unawaited(_closeImport()),
             ),
           ),
         ),
@@ -523,7 +537,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
                           child: PrivoraButton(
                             text: 'Cancel',
                             variant: PrivoraButtonVariant.secondary,
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: () => unawaited(_closeImport()),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -555,8 +569,7 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
                           child: PrivoraButton(
                             text: 'Done',
                             variant: PrivoraButtonVariant.primary,
-                            onPressed: () =>
-                                Navigator.of(context).pop(_successCount > 0),
+                            onPressed: () => unawaited(_closeImport()),
                           ),
                         ),
                       ],

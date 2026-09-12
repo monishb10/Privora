@@ -19,6 +19,7 @@ import '../data/services/photo_upload_service.dart';
 import '../data/services/supabase_auth_service.dart';
 import '../data/services/supabase_database_service.dart';
 import '../data/services/supabase_storage_service.dart';
+import '../data/services/vault_otp_service.dart';
 
 // --- CORE SECURITY PROVIDERS ---
 
@@ -63,6 +64,10 @@ final supabaseStorageServiceProvider = Provider<SupabaseStorageService>((ref) {
 
 final cloudinaryMediaServiceProvider = Provider<CloudinaryMediaService>((ref) {
   return CloudinaryMediaService();
+});
+
+final vaultOtpServiceProvider = Provider<VaultOtpService>((ref) {
+  return VaultOtpService();
 });
 
 final photoDownloadServiceProvider = Provider<PhotoDownloadService>((ref) {
@@ -124,6 +129,7 @@ final vaultRepositoryProvider = Provider<VaultRepository>((ref) {
     cryptoService: ref.watch(vaultCryptoServiceProvider),
     secureKeyService: ref.watch(secureKeyServiceProvider),
     databaseService: ref.watch(supabaseDatabaseServiceProvider),
+    otpService: ref.watch(vaultOtpServiceProvider),
   );
 });
 

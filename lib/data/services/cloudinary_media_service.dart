@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
@@ -113,25 +115,75 @@ class CloudinaryUploadParams {
 /// Metadata returned by Cloudinary following a successful raw asset upload.
 class CloudinaryUploadResult {
   final String publicId;
-  final String? assetId;
+  final String assetId;
+  final String resourceType;
+  final String type;
+  final String? format;
   final String? version;
   final int bytes;
 
   const CloudinaryUploadResult({
     required this.publicId,
-    this.assetId,
+    required this.assetId,
+    this.resourceType = 'raw',
+    this.type = 'authenticated',
+    this.format,
     this.version,
     required this.bytes,
   });
+
+  factory CloudinaryUploadResult.fromJson(Map<String, dynamic> json) {
+    return CloudinaryUploadResult(
+      publicId: json['public_id'] as String? ?? '',
+      assetId: json['asset_id'] as String? ?? '',
+      resourceType: json['resource_type'] as String? ?? '',
+      type: json['type'] as String? ?? '',
+      format: json['format'] as String?,
+      version: json['version']?.toString(),
+      bytes: (json['bytes'] as int?) ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toSafeLogMap() {
+    return {
+      'asset_id': assetId,
+      'public_id': publicId,
+      'resource_type': resourceType,
+      'type': type,
+      if (format != null) 'format': format,
+      if (version != null) 'version': version,
+      'bytes': bytes,
+    };
+  }
 }
 
 /// Service managing client-side interaction with Cloudinary and the
 /// Supabase Edge Function for signed uploads, downloads, commits, and deletions.
 class CloudinaryMediaService {
+  /// Cloud uploads must tolerate real mobile-network speeds.
+  static const Duration minimumUploadTimeout = Duration(minutes: 3);
+  static const Duration maximumUploadTimeout = Duration(minutes: 15);
+  static const int _assumedSlowUploadBytesPerSecond = 64 * 1024;
+  static const int _uploadResponseGraceSeconds = 60;
+
   final http.Client _httpClient;
 
   CloudinaryMediaService({http.Client? httpClient})
     : _httpClient = httpClient ?? http.Client();
+
+  /// Returns a bounded upload timeout based on ciphertext size.
+  @visibleForTesting
+  static Duration uploadTimeoutForByteLength(int byteLength) {
+    final safeByteLength = byteLength < 0 ? 0 : byteLength;
+    final transferSeconds = (safeByteLength / _assumedSlowUploadBytesPerSecond)
+        .ceil();
+    final estimatedSeconds = _uploadResponseGraceSeconds + transferSeconds;
+    final boundedSeconds = estimatedSeconds
+        .clamp(minimumUploadTimeout.inSeconds, maximumUploadTimeout.inSeconds)
+        .toInt();
+
+    return Duration(seconds: boundedSeconds);
+  }
 
   sp.SupabaseClient get _client {
     final client = SupabaseConfig.client;
@@ -142,7 +194,6 @@ class CloudinaryMediaService {
   }
 
   /// Obtains server-signed upload parameters from the Supabase Edge Function.
-  /// Strictly requires a valid authenticated user session.
   Future<CloudinaryUploadParams> createUploadSignature({
     required String categoryId,
     required String photoId,
@@ -180,8 +231,7 @@ class CloudinaryMediaService {
     }
   }
 
-  /// Parses and sanitizes Cloudinary error response without leaking sensitive
-  /// tokens, API secrets, signature hashes, or ciphertext bytes.
+  /// Parses and sanitizes Cloudinary error response without leaking sensitive secrets.
   static String parseCloudinaryErrorMessage({
     required int statusCode,
     required String responseBody,
@@ -189,7 +239,6 @@ class CloudinaryMediaService {
   }) {
     String? rawError;
 
-    // 1. Check X-Cld-Error header (case-insensitive header lookup)
     if (headers != null) {
       for (final entry in headers.entries) {
         if (entry.key.toLowerCase() == 'x-cld-error') {
@@ -199,7 +248,6 @@ class CloudinaryMediaService {
       }
     }
 
-    // 2. Read JSON error.message
     if (responseBody.isNotEmpty) {
       try {
         final decoded = jsonDecode(responseBody);
@@ -210,9 +258,7 @@ class CloudinaryMediaService {
             rawError = decoded['message'].toString();
           }
         }
-      } catch (_) {
-        // Body was not JSON
-      }
+      } catch (_) {}
     }
 
     return sanitizeCloudinaryError(rawError, statusCode);
@@ -225,24 +271,19 @@ class CloudinaryMediaService {
     }
 
     var sanitized = rawError
-        // Redact hex signatures (32-char md5, 40-char sha1, or 64-char sha256)
         .replaceAll(RegExp(r'\b[a-fA-F0-9]{32,64}\b'), '[REDACTED_SIGNATURE]')
-        // Redact string to sign (e.g. "String to sign - '...'" or "String to sign: ...")
         .replaceAll(
           RegExp(r'String to sign\s*[-:=]?\s*.*', caseSensitive: false),
           'String to sign: [REDACTED]',
         )
-        // Redact api_secret
         .replaceAll(
           RegExp(r'api_secret\s*[:=]\s*[^\s,]+', caseSensitive: false),
           'api_secret=[REDACTED]',
         )
-        // Redact api_key
         .replaceAll(
           RegExp(r'api_key\s*[:=]\s*[^\s,]+', caseSensitive: false),
           'api_key=[REDACTED]',
         )
-        // Redact bearer tokens
         .replaceAll(
           RegExp(r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', caseSensitive: false),
           'Bearer [REDACTED]',
@@ -269,13 +310,14 @@ class CloudinaryMediaService {
     Map<String, String>? signedParams,
     String stage = 'upload',
   }) async {
+    final uploadTimeout = uploadTimeoutForByteLength(bytes.length);
+
     try {
       final uri = Uri.parse(
         'https://api.cloudinary.com/v1_1/$cloudName/raw/upload',
       );
       final request = http.MultipartRequest('POST', uri);
 
-      // Multipart request contains: file, api_key, signature, and every exact entry in signedParams
       request.fields['api_key'] = apiKey;
       request.fields['signature'] = signature;
 
@@ -293,7 +335,6 @@ class CloudinaryMediaService {
         request.fields[entry.key] = entry.value;
       }
 
-      // Ensure type=authenticated is always included in multipart fields
       if (!request.fields.containsKey('type')) {
         request.fields['type'] = 'authenticated';
       }
@@ -302,9 +343,16 @@ class CloudinaryMediaService {
         http.MultipartFile.fromBytes('file', bytes, filename: filename),
       );
 
+      if (kDebugMode) {
+        debugPrint(
+          '[CloudinaryMediaService] Starting $stage upload '
+          '(${bytes.length} encrypted bytes, timeout ${uploadTimeout.inSeconds}s)',
+        );
+      }
+
       final streamedResponse = await _httpClient
           .send(request)
-          .timeout(const Duration(seconds: 45));
+          .timeout(uploadTimeout);
 
       final response = await http.Response.fromStream(streamedResponse);
 
@@ -323,15 +371,60 @@ class CloudinaryMediaService {
 
         throw StorageException(
           'Cloudinary upload failed (HTTP ${response.statusCode}): $safeError',
+          statusCode: response.statusCode,
         );
       }
 
       final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
-      return CloudinaryUploadResult(
-        publicId: responseBody['public_id'] as String? ?? publicId,
-        assetId: responseBody['asset_id'] as String?,
-        version: responseBody['version']?.toString(),
-        bytes: (responseBody['bytes'] as int?) ?? bytes.length,
+      final result = CloudinaryUploadResult.fromJson(responseBody);
+
+      if (kDebugMode) {
+        debugPrint(
+          '[CloudinaryMediaService] Upload success ($stage): ${result.publicId}',
+        );
+      }
+
+      // Verification of required identity fields
+      if (result.assetId.isEmpty) {
+        throw const StorageException(
+          'Cloudinary upload validation failed: missing asset_id in response.',
+          code: 'INVALID_ASSET_ID',
+        );
+      }
+      if (result.publicId.isEmpty) {
+        throw const StorageException(
+          'Cloudinary upload validation failed: missing public_id in response.',
+          code: 'INVALID_PUBLIC_ID',
+        );
+      }
+      if (result.resourceType != 'raw') {
+        throw StorageException(
+          'Cloudinary upload validation failed: unexpected resource_type "${result.resourceType}" (expected raw).',
+          code: 'INVALID_RESOURCE_TYPE',
+        );
+      }
+      if (result.type != 'authenticated') {
+        throw StorageException(
+          'Cloudinary upload validation failed: unexpected type "${result.type}" (expected authenticated).',
+          code: 'INVALID_DELIVERY_TYPE',
+        );
+      }
+
+      return result;
+    } on TimeoutException {
+      if (kDebugMode) {
+        debugPrint(
+          '[CloudinaryMediaService] $stage upload timed out after ${uploadTimeout.inSeconds}s',
+        );
+      }
+      throw StorageException(
+        'The encrypted photo upload timed out after ${uploadTimeout.inMinutes} minutes. Keep Privora open and try again on a stable connection.',
+        code: 'CLOUDINARY_UPLOAD_TIMEOUT',
+      );
+    } on SocketException {
+      throw const StorageException(
+        'Check your internet connection.',
+        code: 'NETWORK_ERROR',
       );
     } catch (e) {
       if (kDebugMode) {
@@ -353,8 +446,12 @@ class CloudinaryMediaService {
     required int encryptedSize,
     int? width,
     int? height,
-    String? assetId,
-    String? version,
+    required String fullPublicId,
+    required String thumbnailPublicId,
+    required String fullAssetId,
+    required String thumbnailAssetId,
+    String? fullVersion,
+    int? fullBytes,
   }) async {
     try {
       final response = await _client.functions
@@ -367,10 +464,14 @@ class CloudinaryMediaService {
               'displayName': displayName,
               'mimeType': mimeType,
               'encryptedSize': encryptedSize,
-              'width': ?width,
-              'height': ?height,
-              'assetId': ?assetId,
-              'version': ?version,
+              'width': width,
+              'height': height,
+              'fullPublicId': fullPublicId,
+              'thumbnailPublicId': thumbnailPublicId,
+              'fullAssetId': fullAssetId,
+              'thumbnailAssetId': thumbnailAssetId,
+              'fullVersion': fullVersion,
+              'fullBytes': fullBytes,
             },
           )
           .timeout(const Duration(seconds: 20));
@@ -415,8 +516,19 @@ class CloudinaryMediaService {
         final errorMsg = response.data is Map
             ? response.data['error']?.toString()
             : 'Edge Function returned error ${response.status}';
+        if (response.status == 404 ||
+            (errorMsg != null &&
+                (errorMsg.toLowerCase().contains('not found') ||
+                    errorMsg.contains('Cloud file could not be found')))) {
+          throw const StorageException(
+            'Cloud file could not be found.',
+            code: 'NOT_FOUND',
+            statusCode: 404,
+          );
+        }
         throw StorageException(
           errorMsg ?? 'Failed to get signed download URL.',
+          statusCode: response.status,
         );
       }
 
@@ -429,6 +541,16 @@ class CloudinaryMediaService {
         throw const StorageException('Invalid download URL received.');
       }
       return url;
+    } on SocketException {
+      throw const StorageException(
+        'Check your internet connection.',
+        code: 'NETWORK_ERROR',
+      );
+    } on TimeoutException {
+      throw const StorageException(
+        'Check your internet connection.',
+        code: 'TIMEOUT',
+      );
     } catch (e) {
       debugPrint('getSignedDownloadUrl error: $e');
       if (e is AppException) rethrow;
@@ -444,13 +566,37 @@ class CloudinaryMediaService {
           .get(uri)
           .timeout(const Duration(seconds: 30));
 
+      if (response.statusCode == 404) {
+        throw const StorageException(
+          'Cloud file could not be found.',
+          code: 'NOT_FOUND',
+          statusCode: 404,
+        );
+      }
+
       if (response.statusCode != 200) {
         throw StorageException(
           'Failed to download asset: HTTP ${response.statusCode}',
+          statusCode: response.statusCode,
         );
       }
 
       return response.bodyBytes;
+    } on SocketException {
+      throw const StorageException(
+        'Check your internet connection.',
+        code: 'NETWORK_ERROR',
+      );
+    } on TimeoutException {
+      throw const StorageException(
+        'Check your internet connection.',
+        code: 'TIMEOUT',
+      );
+    } on http.ClientException {
+      throw const StorageException(
+        'Check your internet connection.',
+        code: 'NETWORK_ERROR',
+      );
     } catch (e) {
       debugPrint('downloadEncryptedBytes error: $e');
       if (e is AppException) rethrow;
@@ -483,7 +629,6 @@ class CloudinaryMediaService {
   }
 
   /// Cleans up orphaned or partially uploaded assets in Cloudinary.
-  /// Prefers server-tracked photoId from pending_uploads table.
   Future<void> cleanupFailedUpload({
     String? photoId,
     String? fullPublicId,
@@ -498,9 +643,9 @@ class CloudinaryMediaService {
             'cloudinary-media',
             body: {
               'action': 'cleanupFailedUpload',
-              'photoId': ?photoId,
-              'fullPublicId': ?fullPublicId,
-              'thumbnailPublicId': ?thumbnailPublicId,
+              'photoId': photoId,
+              'fullPublicId': fullPublicId,
+              'thumbnailPublicId': thumbnailPublicId,
             },
           )
           .timeout(const Duration(seconds: 15));

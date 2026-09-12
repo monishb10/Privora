@@ -494,8 +494,9 @@ void main() {
         expect(fakeCloudinary.lastCleanedThumbnailPublicId, isNotNull);
         // Verify no orphaned database record exists
         expect(fakeDb.storedPhotos.isEmpty, isTrue);
-        // Verify source file was cleaned
-        expect(fakeCleaner.deleteCalls, greaterThanOrEqualTo(1));
+        // The private source copy must survive so Retry Failed can reuse it.
+        expect(fakeCleaner.deleteCalls, 0);
+        expect(await sourceFile.exists(), isTrue);
       },
     );
 

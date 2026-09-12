@@ -141,6 +141,11 @@ class FakeTestDatabaseService extends Fake implements SupabaseDatabaseService {
     storedPhotos[photo.id] = photo;
     return photo;
   }
+
+  @override
+  Future<VaultPhoto?> getPhotoById(String photoId, String userId) async {
+    return storedPhotos[photoId];
+  }
 }
 
 class FakeTestPinService extends Fake implements PinService {

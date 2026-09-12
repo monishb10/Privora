@@ -56,10 +56,9 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
       icon: Icons.logout_rounded,
     );
     if (confirmed == true && mounted) {
-      final authRepo = ref.read(authRepositoryProvider);
+      await ref.read(authRepositoryProvider).signOut();
       ref.invalidate(currentUserProvider);
       ref.invalidate(categoriesProvider);
-      await authRepo.signOut();
       if (mounted) {
         context.go('/login');
       }
@@ -86,12 +85,6 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
               onPressed: _handleBackToLogin,
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => context.push('/recover-vault'),
-              child: const Text('Recover Vault'),
-            ),
-          ],
         ),
         body: SafeArea(
           child: LayoutBuilder(
@@ -133,7 +126,7 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 40),
                           child: Text(
-                            'Choose a 6-digit PIN to secure your private vault on this device.',
+                            'Choose a 6-digit PIN for this Google account and private vault.',
                             style: AppTypography.bodyMedium.copyWith(
                               color: AppColors.secondaryTextColor,
                             ),

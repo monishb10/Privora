@@ -93,10 +93,13 @@ class _ChangePinScreenState extends ConsumerState<ChangePinScreen> {
               ref.read(currentUserProvider) ??
               SupabaseConfig.client?.auth.currentUser;
           final vaultRepo = ref.read(vaultRepositoryProvider);
+          if (user == null) {
+            throw Exception('User session not found.');
+          }
           await vaultRepo.changePin(
             currentPin: _currentPin,
             newPin: _newPin,
-            userId: user?.id,
+            userId: user.id,
           );
 
           if (!mounted) return;
@@ -249,9 +252,9 @@ class _ChangePinScreenState extends ConsumerState<ChangePinScreen> {
                           TextButton(
                             onPressed: _isLoading
                                 ? null
-                                : () => context.push('/recover-vault'),
+                                : () => context.push('/forgot-pin'),
                             child: Text(
-                              'Forgot current PIN? Reset with recovery code',
+                              'Forgot current PIN? Reset with Gmail code',
                               style: AppTypography.labelMedium.copyWith(
                                 color: AppColors.primaryAccent,
                                 fontWeight: FontWeight.w600,

@@ -12,6 +12,7 @@ import 'package:privora/core/security/vault_crypto_service.dart';
 import 'package:privora/data/repositories/vault_repository.dart';
 import 'package:privora/data/services/supabase_auth_service.dart';
 import 'package:privora/data/services/supabase_database_service.dart';
+import 'package:privora/data/services/vault_otp_service.dart';
 import 'package:privora/features/auth/login_screen.dart';
 
 class FakeSecureStorage extends Fake implements FlutterSecureStorage {
@@ -108,47 +109,6 @@ class FakeDatabaseService extends SupabaseDatabaseService {
   }
 
   @override
-  Future<void> saveVaultKeys({
-    required String userId,
-    required String recoveryWrappedKey,
-    required String recoverySalt,
-    required String recoveryNonce,
-    int cryptoVersion = 1,
-  }) async {
-    final existing = vaults[userId] ?? {};
-    existing.addAll({
-      'user_id': userId,
-      'recovery_wrapped_key': recoveryWrappedKey,
-      'recovery_salt': recoverySalt,
-      'recovery_nonce': recoveryNonce,
-      'has_recovery_code': true,
-      'crypto_version': cryptoVersion,
-    });
-    vaults[userId] = existing;
-  }
-
-  @override
-  Future<void> saveRecoveryEnvelope({
-    required String userId,
-    required String recoveryWrappedKey,
-    required String recoverySalt,
-    required String recoveryNonce,
-    int cryptoVersion = 1,
-  }) async {
-    final existing = vaults[userId] ?? {};
-    existing.addAll({
-      'user_id': userId,
-      'recovery_wrapped_key': recoveryWrappedKey,
-      'recovery_salt': recoverySalt,
-      'recovery_nonce': recoveryNonce,
-      'has_recovery_code': true,
-      'crypto_version': cryptoVersion,
-      'updated_at': DateTime.now().toIso8601String(),
-    });
-    vaults[userId] = existing;
-  }
-
-  @override
   Future<void> saveVaultPinEnvelope({
     required String userId,
     required String pinWrappedKey,
@@ -157,7 +117,7 @@ class FakeDatabaseService extends SupabaseDatabaseService {
     required String pinVerifier,
     int cryptoVersion = 1,
   }) async {
-    final existing = vaults[userId] ?? {'has_recovery_code': false};
+    final existing = vaults[userId] ?? <String, dynamic>{};
     existing.addAll({
       'user_id': userId,
       'pin_wrapped_key': pinWrappedKey,
@@ -169,10 +129,25 @@ class FakeDatabaseService extends SupabaseDatabaseService {
     });
     vaults[userId] = existing;
   }
+}
+
+class FakeVaultOtpService extends VaultOtpService {
+  Uint8List? storedKey;
 
   @override
-  Future<bool> hasRecoveryCode(String userId) async {
-    return vaults[userId]?['has_recovery_code'] == true;
+  Future<void> storeMasterKey(Uint8List masterKey) async {
+    storedKey = Uint8List.fromList(masterKey);
+  }
+
+  @override
+  Future<bool> hasEnvelope() async => storedKey != null;
+
+  @override
+  Future<Uint8List> loadMasterKeyAfterOtp() async {
+    if (storedKey == null) {
+      throw const PinResetException('No Gmail PIN-reset backup exists.');
+    }
+    return Uint8List.fromList(storedKey!);
   }
 }
 
@@ -189,8 +164,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Verify Privora branding
-        expect(find.byKey(const Key('privora_brand_wordmark')), findsOneWidget);
-        expect(find.bySemanticsLabel('Privora'), findsOneWidget);
+        expect(find.text('Privora'), findsOneWidget);
         expect(find.text('Your private cloud gallery'), findsOneWidget);
 
         // Verify Continue with Google button
@@ -288,6 +262,7 @@ void main() {
           cryptoService: cryptoService,
           secureKeyService: secureKeyService,
           databaseService: fakeDb,
+          otpService: FakeVaultOtpService(),
         );
 
         const userId = 'returning-user-123';
@@ -296,11 +271,51 @@ void main() {
         await vaultRepo.initializeNewVault(userId: userId, pin: '654321');
         expect(fakeDb.vaults.containsKey(userId), isTrue);
 
-        // 2. Attempting to initialize vault again throws CryptoException rather than overwriting
+        // 2. Attempting to initialize vault again fails rather than overwriting
         expect(
           () => vaultRepo.initializeNewVault(userId: userId, pin: '123456'),
-          throwsA(isA<CryptoException>()),
+          throwsA(isA<PinException>()),
         );
+      },
+    );
+
+    test(
+      'Gmail OTP reset re-wraps the same master key with the new PIN',
+      () async {
+        final fakeStorage = FakeSecureStorage();
+        final fakeDb = FakeDatabaseService();
+        final fakeOtp = FakeVaultOtpService();
+        final secureKeyService = SecureKeyService(storage: fakeStorage);
+        final cryptoService = VaultCryptoService(iterations: 1000);
+        final pinService = PinService(
+          secureKeyService: secureKeyService,
+          cryptoService: cryptoService,
+        );
+        final vaultRepo = VaultRepository(
+          pinService: pinService,
+          cryptoService: cryptoService,
+          secureKeyService: secureKeyService,
+          databaseService: fakeDb,
+          otpService: fakeOtp,
+        );
+
+        const userId = 'gmail-otp-user';
+        await vaultRepo.initializeNewVault(userId: userId, pin: '111111');
+        final originalKey = Uint8List.fromList(vaultRepo.activeMasterKey!);
+
+        vaultRepo.lockSession();
+        await vaultRepo.resetPinAfterEmailOtp(userId: userId, newPin: '222222');
+        vaultRepo.lockSession();
+
+        expect(
+          await vaultRepo.verifyAndUnlock('111111', userId: userId),
+          isFalse,
+        );
+        expect(
+          await vaultRepo.verifyAndUnlock('222222', userId: userId),
+          isTrue,
+        );
+        expect(vaultRepo.activeMasterKey, equals(originalKey));
       },
     );
 

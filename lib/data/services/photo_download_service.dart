@@ -107,37 +107,37 @@ class PhotoDownloadService {
     required bool isThumbnail,
     required Uint8List masterKey,
   }) async {
-    try {
-      Uint8List encryptedBytes;
+    Uint8List encryptedBytes;
 
-      if (photo.isCloudinary) {
-        final cService = cloudinaryService;
-        if (cService == null) {
-          throw const StorageException('Cloudinary service is not configured.');
-        }
-
-        // 1. Request signed delivery URL from Edge Function
-        final target = isThumbnail ? 'thumbnail' : 'full';
-        final signedUrl = await cService.getSignedDownloadUrl(
-          photoId: photo.id,
-          target: target,
-        );
-
-        // 2. Download encrypted ciphertext bytes via HTTP
-        encryptedBytes = await cService.downloadEncryptedBytes(signedUrl);
-      } else {
-        // Legacy Supabase Storage download
-        final sService = storageService;
-        if (sService == null) {
-          throw const StorageException(
-            'Supabase storage service is not configured.',
-          );
-        }
-        final path = isThumbnail ? photo.thumbnailPath : photo.storagePath;
-        encryptedBytes = await sService.downloadEncryptedBytes(path);
+    if (photo.isCloudinary) {
+      final cService = cloudinaryService;
+      if (cService == null) {
+        throw const StorageException('Cloudinary service is not configured.');
       }
 
-      // 3. Decrypt in RAM
+      // 1. Request signed delivery URL from Edge Function
+      final target = isThumbnail ? 'thumbnail' : 'full';
+      final signedUrl = await cService.getSignedDownloadUrl(
+        photoId: photo.id,
+        target: target,
+      );
+
+      // 2. Download encrypted ciphertext bytes via HTTP
+      encryptedBytes = await cService.downloadEncryptedBytes(signedUrl);
+    } else {
+      // Legacy Supabase Storage download
+      final sService = storageService;
+      if (sService == null) {
+        throw const StorageException(
+          'Supabase storage service is not configured.',
+        );
+      }
+      final path = isThumbnail ? photo.thumbnailPath : photo.storagePath;
+      encryptedBytes = await sService.downloadEncryptedBytes(path);
+    }
+
+    // 3. Decrypt in RAM strictly after successful download
+    try {
       final decrypted = await cryptoService.decryptPhotoBytes(
         encryptedBytes,
         masterKey,
@@ -147,9 +147,9 @@ class PhotoDownloadService {
       _memoryCache[cacheKey] = decrypted;
       return decrypted;
     } catch (e) {
-      debugPrint('Failed to download or decrypt ${photo.id}: $e');
-      if (e is AppException) rethrow;
-      throw CryptoException('Failed to load image: ${e.toString()}');
+      debugPrint('Failed to decrypt photo ${photo.id}: $e');
+      if (e is CryptoException) rethrow;
+      throw const CryptoException('Failed to decrypt photo');
     }
   }
 
@@ -172,12 +172,18 @@ class PhotoDownloadService {
         );
       }
       final encryptedBytes = await sService.downloadEncryptedBytes(path);
-      final decrypted = await cryptoService.decryptPhotoBytes(
-        encryptedBytes,
-        masterKey,
-      );
-      _memoryCache[path] = decrypted;
-      return decrypted;
+      try {
+        final decrypted = await cryptoService.decryptPhotoBytes(
+          encryptedBytes,
+          masterKey,
+        );
+        _memoryCache[path] = decrypted;
+        return decrypted;
+      } catch (e) {
+        debugPrint('Failed to decrypt photo: $e');
+        if (e is CryptoException) rethrow;
+        throw const CryptoException('Failed to decrypt photo');
+      }
     }();
 
     _pendingLoads[path] = future;
