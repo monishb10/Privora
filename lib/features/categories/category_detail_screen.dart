@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -85,13 +86,26 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       final user = ref.read(currentUserProvider);
       if (user == null) return;
 
+      final count = _selectedPhotoIds.length;
       final photoRepo = ref.read(photoRepositoryProvider);
       for (final id in _selectedPhotoIds) {
         await photoRepo.softDeletePhoto(id, user.id);
       }
 
+      ref
+          .read(categoryRepositoryProvider)
+          .updatePhotoCountLocally(widget.category.id, -count);
       ref.invalidate(categoriesProvider);
       ref.invalidate(recentlyDeletedPhotosProvider);
+
+      unawaited(() async {
+        try {
+          await ref
+              .read(categoryRepositoryProvider)
+              .getCategories(user.id, forceRefresh: true);
+          ref.invalidate(categoriesProvider);
+        } catch (_) {}
+      }());
 
       setState(() {
         _selectedPhotoIds.clear();

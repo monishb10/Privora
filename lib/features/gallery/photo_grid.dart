@@ -140,18 +140,77 @@ class PhotoGrid extends ConsumerWidget {
   }
 }
 
-class _EncryptedThumbnailTile extends ConsumerWidget {
+class EncryptedThumbnailTile extends ConsumerStatefulWidget {
   final VaultPhoto photo;
   final Uint8List masterKey;
 
-  const _EncryptedThumbnailTile({required this.photo, required this.masterKey});
+  const EncryptedThumbnailTile({
+    super.key,
+    required this.photo,
+    required this.masterKey,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<Uint8List>(
-      future: ref
+  ConsumerState<EncryptedThumbnailTile> createState() =>
+      _EncryptedThumbnailTileState();
+}
+
+typedef _EncryptedThumbnailTile = EncryptedThumbnailTile;
+
+class _EncryptedThumbnailTileState
+    extends ConsumerState<EncryptedThumbnailTile> {
+  Future<Uint8List>? _loadFuture;
+  Uint8List? _cachedBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOrLoad();
+  }
+
+  @override
+  void didUpdateWidget(covariant EncryptedThumbnailTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photo.id != widget.photo.id ||
+        oldWidget.masterKey != widget.masterKey) {
+      _checkOrLoad();
+    }
+  }
+
+  void _checkOrLoad() {
+    final downloadService = ref.read(photoDownloadServiceProvider);
+    final cached = downloadService.getCachedThumbnail(widget.photo);
+    if (cached != null) {
+      _cachedBytes = cached;
+      _loadFuture = null;
+    } else {
+      _cachedBytes = null;
+      _loadFuture = ref
           .read(photoRepositoryProvider)
-          .loadThumbnail(photo: photo, masterKey: masterKey),
+          .loadThumbnail(photo: widget.photo, masterKey: widget.masterKey);
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _loadFuture = ref
+          .read(photoRepositoryProvider)
+          .loadThumbnail(photo: widget.photo, masterKey: widget.masterKey);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_cachedBytes != null) {
+      return Image.memory(
+        _cachedBytes!,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    }
+
+    return FutureBuilder<Uint8List>(
+      future: _loadFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -169,16 +228,21 @@ class _EncryptedThumbnailTile extends ConsumerWidget {
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
-          return const Center(
-            child: Icon(
-              Icons.broken_image_outlined,
-              size: 24,
-              color: AppColors.secondaryTextColor,
+          return Center(
+            child: IconButton(
+              icon: const Icon(
+                Icons.refresh_rounded,
+                size: 22,
+                color: AppColors.secondaryTextColor,
+              ),
+              tooltip: 'Retry loading thumbnail',
+              onPressed: _retry,
             ),
           );
         }
 
-        // Thumbnail fade-in over 140ms
+        _cachedBytes = snapshot.data;
+
         return TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0.0, end: 1.0),
           duration: AppMotion.thumbnailFadeDuration,
@@ -186,7 +250,11 @@ class _EncryptedThumbnailTile extends ConsumerWidget {
           builder: (context, opacity, child) {
             return Opacity(
               opacity: opacity,
-              child: Image.memory(snapshot.data!, fit: BoxFit.cover),
+              child: Image.memory(
+                snapshot.data!,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+              ),
             );
           },
         );

@@ -85,6 +85,7 @@ class PhotoRepository {
     String? photoPath,
     VaultPhoto? photo,
     required Uint8List masterKey,
+    String? userId,
   }) {
     if (photo != null) {
       return downloadService.getDecryptedFullPhoto(

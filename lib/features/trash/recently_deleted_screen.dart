@@ -1,4 +1,5 @@
-import 'dart:typed_data';
+import 'dart:async';
+import '../gallery/photo_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +7,6 @@ import '../../app/providers.dart';
 import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirmation_dialog.dart';
@@ -45,8 +45,20 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
 
     try {
       await ref.read(photoRepositoryProvider).restorePhoto(photo.id, user.id);
+      ref
+          .read(categoryRepositoryProvider)
+          .updatePhotoCountLocally(photo.categoryId, 1);
       ref.invalidate(recentlyDeletedPhotosProvider);
       ref.invalidate(categoriesProvider);
+
+      unawaited(() async {
+        try {
+          await ref
+              .read(categoryRepositoryProvider)
+              .getCategories(user.id, forceRefresh: true);
+          ref.invalidate(categoriesProvider);
+        } catch (_) {}
+      }());
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -193,7 +205,7 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Items are permanently erased after 30 days.',
+                        '${photos.length} ${photos.length == 1 ? 'photo' : 'photos'} • Erased after 30 days.',
                         style: AppTypography.labelSmall.copyWith(
                           color: AppColors.primaryText,
                         ),
@@ -244,36 +256,9 @@ class _RecentlyDeletedScreenState extends ConsumerState<RecentlyDeletedScreen> {
                               height: 60,
                               child: masterKey == null
                                   ? Container(color: AppColors.softBlueSurface)
-                                  : FutureBuilder<Uint8List>(
-                                      future: ref
-                                          .read(photoRepositoryProvider)
-                                          .loadThumbnail(
-                                            photo: photo,
-                                            masterKey: masterKey,
-                                          ),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.hasData) {
-                                          return TweenAnimationBuilder<double>(
-                                            tween: Tween<double>(
-                                              begin: 0.0,
-                                              end: 1.0,
-                                            ),
-                                            duration:
-                                                AppMotion.thumbnailFadeDuration,
-                                            builder: (context, opacity, _) =>
-                                                Opacity(
-                                                  opacity: opacity,
-                                                  child: Image.memory(
-                                                    snapshot.data!,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                          );
-                                        }
-                                        return Container(
-                                          color: AppColors.softBlueSurface,
-                                        );
-                                      },
+                                  : EncryptedThumbnailTile(
+                                      photo: photo,
+                                      masterKey: masterKey,
                                     ),
                             ),
                           ),

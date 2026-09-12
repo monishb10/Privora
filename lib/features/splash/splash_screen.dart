@@ -1,3 +1,4 @@
+import '../../core/widgets/privora_wordmark.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -170,9 +171,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             children: [
               const PrivoraLogo(size: 96),
               const SizedBox(height: 20),
-              const Text(
-                AppConstants.appName,
-                style: AppTypography.displayLarge,
+              const PrivoraWordmark(
+                height: 38,
+                wordmarkKey: Key('privora_brand_wordmark'),
               ),
               const SizedBox(height: 8),
               Text(

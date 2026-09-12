@@ -13,6 +13,7 @@ import '../data/repositories/category_repository.dart';
 import '../data/repositories/photo_repository.dart';
 import '../data/repositories/vault_repository.dart';
 import '../data/services/cloudinary_media_service.dart';
+import '../data/services/gallery_export_service.dart';
 import '../data/services/gallery_import_service.dart';
 import '../data/services/photo_download_service.dart';
 import '../data/services/photo_upload_service.dart';
@@ -75,6 +76,12 @@ final photoDownloadServiceProvider = Provider<PhotoDownloadService>((ref) {
     storageService: ref.watch(supabaseStorageServiceProvider),
     cloudinaryService: ref.watch(cloudinaryMediaServiceProvider),
     cryptoService: ref.watch(vaultCryptoServiceProvider),
+  );
+});
+
+final galleryExportServiceProvider = Provider<GalleryExportService>((ref) {
+  return GalleryExportService(
+    downloadService: ref.watch(photoDownloadServiceProvider),
   );
 });
 

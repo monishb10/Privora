@@ -1,3 +1,5 @@
+import '../../data/services/photo_download_service.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -36,10 +38,13 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   late int _currentIndex;
   late List<VaultPhoto> _photos;
   bool _showUi = true;
+  bool _isExporting = false;
+  late PhotoDownloadService _downloadService;
 
   @override
   void initState() {
     super.initState();
+    _downloadService = ref.read(photoDownloadServiceProvider);
     _photos = List.from(widget.photos);
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
@@ -48,6 +53,7 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _downloadService.clearFullPhotoCache();
     super.dispose();
   }
 
@@ -97,6 +103,66 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
     }
   }
 
+  Future<void> _handleSaveToGallery() async {
+    if (_isExporting) return;
+
+    final masterKey = ref.read(vaultRepositoryProvider).activeMasterKey;
+    if (masterKey == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Vault session locked.')));
+      }
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final exportService = ref.read(galleryExportServiceProvider);
+      await exportService.savePhotoToGallery(
+        photo: _currentPhoto,
+        masterKey: masterKey,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photo saved to Pictures/Privora'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } on PermissionException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } on CryptoException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } on StorageException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save photo: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
+  }
+
   Future<void> _handleDelete() async {
     final confirmed = await ConfirmationDialog.show(
       context: context,
@@ -114,7 +180,19 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
 
       final photoId = _currentPhoto.id;
       await ref.read(photoRepositoryProvider).softDeletePhoto(photoId, user.id);
+      ref
+          .read(categoryRepositoryProvider)
+          .updatePhotoCountLocally(widget.categoryId, -1);
+      ref.invalidate(categoriesProvider);
       ref.invalidate(recentlyDeletedPhotosProvider);
+      unawaited(() async {
+        try {
+          await ref
+              .read(categoryRepositoryProvider)
+              .getCategories(user.id, forceRefresh: true);
+          ref.invalidate(categoriesProvider);
+        } catch (_) {}
+      }());
 
       setState(() {
         _photos.removeAt(_currentIndex);
@@ -395,6 +473,25 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                       onPressed: _handleShare,
                     ),
                     IconButton(
+                      icon: _isExporting
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.file_download_outlined,
+                              color: Colors.white,
+                            ),
+                      tooltip: 'Save to Gallery',
+                      onPressed: _isExporting ? null : _handleSaveToGallery,
+                    ),
+                    IconButton(
                       icon: const Icon(
                         Icons.drive_file_move_outlined,
                         color: Colors.white,
@@ -425,6 +522,183 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _PhotoViewerPageItem extends ConsumerStatefulWidget {
+  final VaultPhoto photo;
+  final Uint8List masterKey;
+
+  const _PhotoViewerPageItem({required this.photo, required this.masterKey});
+
+  @override
+  ConsumerState<_PhotoViewerPageItem> createState() =>
+      _PhotoViewerPageItemState();
+}
+
+class _PhotoViewerPageItemState extends ConsumerState<_PhotoViewerPageItem> {
+  Uint8List? _thumbnailBytes;
+  Uint8List? _fullPhotoBytes;
+  bool _isLoadingFull = true;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPhotoLoading();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PhotoViewerPageItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photo.id != widget.photo.id ||
+        oldWidget.masterKey != widget.masterKey) {
+      _initPhotoLoading();
+    }
+  }
+
+  void _initPhotoLoading() {
+    final downloadService = ref.read(photoDownloadServiceProvider);
+
+    _fullPhotoBytes = downloadService.getCachedFullPhoto(widget.photo);
+    _thumbnailBytes = downloadService.getCachedThumbnail(widget.photo);
+
+    if (_fullPhotoBytes != null) {
+      _isLoadingFull = false;
+      return;
+    }
+
+    _isLoadingFull = true;
+    _error = null;
+
+    if (_thumbnailBytes == null) {
+      downloadService
+          .getDecryptedThumbnail(
+            photo: widget.photo,
+            masterKey: widget.masterKey,
+          )
+          .then((thumb) {
+            if (mounted && _fullPhotoBytes == null) {
+              setState(() => _thumbnailBytes = thumb);
+            }
+          })
+          .catchError((_) {});
+    }
+
+    downloadService
+        .getDecryptedFullPhoto(photo: widget.photo, masterKey: widget.masterKey)
+        .then((full) {
+          if (mounted) {
+            setState(() {
+              _fullPhotoBytes = full;
+              _isLoadingFull = false;
+            });
+          }
+        })
+        .catchError((e) {
+          if (mounted) {
+            setState(() {
+              _error = e;
+              _isLoadingFull = false;
+            });
+          }
+        });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_fullPhotoBytes != null) {
+      return PhotoView(
+        imageProvider: MemoryImage(_fullPhotoBytes!),
+        minScale: PhotoViewComputedScale.contained,
+        maxScale: PhotoViewComputedScale.covered * 3.0,
+        heroAttributes: PhotoViewHeroAttributes(tag: widget.photo.id),
+      );
+    }
+
+    if (_error != null) {
+      String errorMessage = 'Failed to decrypt photo';
+      final err = _error;
+      final errStr = err.toString().toLowerCase();
+      if ((err is StorageException &&
+              (err.statusCode == 404 || err.code == 'NOT_FOUND')) ||
+          errStr.contains('could not be found') ||
+          errStr.contains('404')) {
+        errorMessage = 'Cloud file could not be found.';
+      } else if (err is CryptoException ||
+          errStr.contains('failed to decrypt')) {
+        errorMessage = 'Failed to decrypt photo';
+      } else if (err is SocketException ||
+          errStr.contains('internet') ||
+          errStr.contains('network') ||
+          errStr.contains('connection')) {
+        errorMessage = 'Check your internet connection.';
+      } else if (err is AppException) {
+        errorMessage = err.message;
+      }
+
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.broken_image_rounded,
+              size: 48,
+              color: AppColors.danger,
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                errorMessage,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.secondaryText,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() => _initPhotoLoading());
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryAccent,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_thumbnailBytes != null) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(child: Image.memory(_thumbnailBytes!, fit: BoxFit.contain)),
+          if (_isLoadingFull)
+            const Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    return const Center(
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryAccent),
       ),
     );
   }

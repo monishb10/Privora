@@ -61,6 +61,27 @@ class CategoryRepository {
         .toList();
   }
 
+  void updatePhotoCountLocally(String categoryId, int delta) {
+    if (_cachedCategories == null) return;
+    _cachedCategories = _cachedCategories!.map((c) {
+      if (c.id == categoryId) {
+        final newCount = (c.photoCount + delta).clamp(0, 999999);
+        return c.copyWith(photoCount: newCount);
+      }
+      return c;
+    }).toList();
+  }
+
+  void setPhotoCountLocally(String categoryId, int count) {
+    if (_cachedCategories == null) return;
+    _cachedCategories = _cachedCategories!.map((c) {
+      if (c.id == categoryId) {
+        return c.copyWith(photoCount: count.clamp(0, 999999));
+      }
+      return c;
+    }).toList();
+  }
+
   void clearCache([String? userId]) {
     if (userId == null || _cachedUserId == userId) {
       _cachedUserId = null;

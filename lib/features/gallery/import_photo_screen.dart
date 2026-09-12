@@ -207,8 +207,24 @@ class _ImportPhotoScreenState extends ConsumerState<ImportPhotoScreen> {
       }
     }
 
-    // Refresh categories and gallery once at the end of the batch
+    // Refresh categories and gallery immediately with optimistic count
+    if (newlySucceeded > 0) {
+      ref
+          .read(categoryRepositoryProvider)
+          .updatePhotoCountLocally(widget.categoryId, newlySucceeded);
+    }
     ref.invalidate(categoriesProvider);
+    unawaited(() async {
+      try {
+        final u = ref.read(currentUserProvider);
+        if (u != null) {
+          await ref
+              .read(categoryRepositoryProvider)
+              .getCategories(u.id, forceRefresh: true);
+          ref.invalidate(categoriesProvider);
+        }
+      } catch (_) {}
+    }());
     ImportPipelineLogger.logStage(
       ImportStage.categoryRefreshed,
       requestId: _importContext?.requestId,

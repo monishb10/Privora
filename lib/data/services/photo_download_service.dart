@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/security/vault_crypto_service.dart';
@@ -13,11 +14,23 @@ class PhotoDownloadService {
   final CloudinaryMediaService? cloudinaryService;
   final VaultCryptoService cryptoService;
 
-  // In-memory memory cache keyed by ID/path (e.g. "thumb_photoId" -> decrypted Uint8List)
-  final Map<String, Uint8List> _memoryCache = {};
+  static const int maxCachedThumbnails = 150;
+  static const int maxCachedFullPhotos = 5;
+  static const int maxConcurrentThumbnailDownloads = 4;
+
+  // Bounded in-memory LRU caches
+  final Map<String, Uint8List> _thumbnailCache = {};
+  final Map<String, Uint8List> _fullPhotoCache = {};
 
   // Track pending downloads to avoid duplicate concurrent network requests
   final Map<String, Future<Uint8List>> _pendingLoads = {};
+
+  // Session cache for signed download URLs (memoized during viewer session)
+  final Map<String, String> _signedUrlCache = {};
+
+  // Bounded concurrency tracking for thumbnail downloads
+  int _activeThumbnailDownloads = 0;
+  final List<Completer<void>> _concurrencyQueue = [];
 
   PhotoDownloadService({
     this.storageService,
@@ -25,18 +38,85 @@ class PhotoDownloadService {
     required this.cryptoService,
   });
 
+  /// Backward-compatible view of in-memory cache
+  Map<String, Uint8List> get memoryCache => {
+    ..._thumbnailCache,
+    ..._fullPhotoCache,
+  };
+
+  /// Constructs a user-isolated thumbnail memoization key.
+  String getThumbnailKey(VaultPhoto photo, [String? userId]) {
+    final uid = userId ?? photo.userId;
+    final assetIdentifier = photo.isCloudinary
+        ? (photo.cloudinaryThumbnailPublicId ??
+              photo.cloudinaryPublicId ??
+              photo.id)
+        : photo.thumbnailPath;
+    return '$uid:thumb:${photo.id}:$assetIdentifier';
+  }
+
+  /// Constructs a user-isolated full-photo memoization key.
+  String getFullPhotoKey(VaultPhoto photo, [String? userId]) {
+    final uid = userId ?? photo.userId;
+    final assetIdentifier = photo.isCloudinary
+        ? (photo.cloudinaryPublicId ?? photo.id)
+        : photo.storagePath;
+    return '$uid:full:${photo.id}:$assetIdentifier';
+  }
+
+  /// Synchronously checks whether a decrypted thumbnail is already in memory.
+  Uint8List? getCachedThumbnail(VaultPhoto photo, {String? userId}) {
+    final key = getThumbnailKey(photo, userId);
+    final cached = _thumbnailCache[key];
+    if (cached != null) {
+      // Refresh LRU order
+      _thumbnailCache.remove(key);
+      _thumbnailCache[key] = cached;
+    }
+    return cached;
+  }
+
+  /// Synchronously checks whether a decrypted full photo is already in memory.
+  Uint8List? getCachedFullPhoto(VaultPhoto photo, {String? userId}) {
+    final key = getFullPhotoKey(photo, userId);
+    final cached = _fullPhotoCache[key];
+    if (cached != null) {
+      // Refresh LRU order
+      _fullPhotoCache.remove(key);
+      _fullPhotoCache[key] = cached;
+    }
+    return cached;
+  }
+
   /// Loads and decrypts a thumbnail into memory, using memory cache if already decrypted.
   Future<Uint8List> getDecryptedThumbnail({
     required VaultPhoto photo,
     required Uint8List masterKey,
   }) async {
-    final cacheKey = 'thumb_${photo.id}';
-    return _loadAndDecrypt(
-      cacheKey: cacheKey,
-      photo: photo,
-      isThumbnail: true,
-      masterKey: masterKey,
+    final cacheKey = getThumbnailKey(photo);
+    final cached = getCachedThumbnail(photo);
+    if (cached != null) return cached;
+
+    if (_pendingLoads.containsKey(cacheKey)) {
+      return _pendingLoads[cacheKey]!;
+    }
+
+    final future = _withThumbnailConcurrencyLimit(
+      () => _fetchDecryptAndCache(
+        cacheKey: cacheKey,
+        photo: photo,
+        isThumbnail: true,
+        masterKey: masterKey,
+      ),
     );
+    _pendingLoads[cacheKey] = future;
+
+    try {
+      final result = await future;
+      return result;
+    } finally {
+      _pendingLoads.remove(cacheKey);
+    }
   }
 
   /// Backward-compatible overload for raw thumbnail storage path.
@@ -52,13 +132,28 @@ class PhotoDownloadService {
     required VaultPhoto photo,
     required Uint8List masterKey,
   }) async {
-    final cacheKey = 'full_${photo.id}';
-    return _loadAndDecrypt(
+    final cacheKey = getFullPhotoKey(photo);
+    final cached = getCachedFullPhoto(photo);
+    if (cached != null) return cached;
+
+    if (_pendingLoads.containsKey(cacheKey)) {
+      return _pendingLoads[cacheKey]!;
+    }
+
+    final future = _fetchDecryptAndCache(
       cacheKey: cacheKey,
       photo: photo,
       isThumbnail: false,
       masterKey: masterKey,
     );
+    _pendingLoads[cacheKey] = future;
+
+    try {
+      final result = await future;
+      return result;
+    } finally {
+      _pendingLoads.remove(cacheKey);
+    }
   }
 
   /// Backward-compatible overload for raw full photo storage path.
@@ -69,35 +164,23 @@ class PhotoDownloadService {
     return _loadAndDecryptLegacy(photoPath, masterKey);
   }
 
-  Future<Uint8List> _loadAndDecrypt({
-    required String cacheKey,
-    required VaultPhoto photo,
-    required bool isThumbnail,
-    required Uint8List masterKey,
-  }) async {
-    // 1. Check in-memory RAM cache
-    if (_memoryCache.containsKey(cacheKey)) {
-      return _memoryCache[cacheKey]!;
+  Future<T> _withThumbnailConcurrencyLimit<T>(Future<T> Function() task) async {
+    if (_activeThumbnailDownloads >= maxConcurrentThumbnailDownloads) {
+      final completer = Completer<void>();
+      _concurrencyQueue.add(completer);
+      await completer.future;
     }
-
-    // 2. Check if a download for this asset is already in flight
-    if (_pendingLoads.containsKey(cacheKey)) {
-      return _pendingLoads[cacheKey]!;
-    }
-
-    final future = _fetchDecryptAndCache(
-      cacheKey: cacheKey,
-      photo: photo,
-      isThumbnail: isThumbnail,
-      masterKey: masterKey,
-    );
-    _pendingLoads[cacheKey] = future;
-
+    _activeThumbnailDownloads++;
     try {
-      final result = await future;
-      return result;
+      return await task();
     } finally {
-      _pendingLoads.remove(cacheKey);
+      _activeThumbnailDownloads--;
+      if (_concurrencyQueue.isNotEmpty) {
+        final next = _concurrencyQueue.removeAt(0);
+        if (!next.isCompleted) {
+          next.complete();
+        }
+      }
     }
   }
 
@@ -115,12 +198,18 @@ class PhotoDownloadService {
         throw const StorageException('Cloudinary service is not configured.');
       }
 
-      // 1. Request signed delivery URL from Edge Function
       final target = isThumbnail ? 'thumbnail' : 'full';
-      final signedUrl = await cService.getSignedDownloadUrl(
-        photoId: photo.id,
-        target: target,
-      );
+      final urlKey = '${photo.id}:$target';
+
+      // 1. Check or request signed delivery URL from Edge Function
+      String? signedUrl = _signedUrlCache[urlKey];
+      if (signedUrl == null) {
+        signedUrl = await cService.getSignedDownloadUrl(
+          photoId: photo.id,
+          target: target,
+        );
+        _signedUrlCache[urlKey] = signedUrl;
+      }
 
       // 2. Download encrypted ciphertext bytes via HTTP
       encryptedBytes = await cService.downloadEncryptedBytes(signedUrl);
@@ -143,8 +232,13 @@ class PhotoDownloadService {
         masterKey,
       );
 
-      // Store in memory-only cache
-      _memoryCache[cacheKey] = decrypted;
+      // Store in appropriate bounded LRU memory-only cache
+      if (isThumbnail) {
+        _putThumbnailInCache(cacheKey, decrypted);
+      } else {
+        _putFullPhotoInCache(cacheKey, decrypted);
+      }
+
       return decrypted;
     } catch (e) {
       debugPrint('Failed to decrypt photo ${photo.id}: $e');
@@ -153,13 +247,29 @@ class PhotoDownloadService {
     }
   }
 
+  void _putThumbnailInCache(String key, Uint8List bytes) {
+    _thumbnailCache.remove(key);
+    _thumbnailCache[key] = bytes;
+    if (_thumbnailCache.length > maxCachedThumbnails) {
+      _thumbnailCache.remove(_thumbnailCache.keys.first);
+    }
+  }
+
+  void _putFullPhotoInCache(String key, Uint8List bytes) {
+    _fullPhotoCache.remove(key);
+    _fullPhotoCache[key] = bytes;
+    if (_fullPhotoCache.length > maxCachedFullPhotos) {
+      _fullPhotoCache.remove(_fullPhotoCache.keys.first);
+    }
+  }
+
   Future<Uint8List> _loadAndDecryptLegacy(
     String path,
     Uint8List masterKey,
   ) async {
-    if (_memoryCache.containsKey(path)) {
-      return _memoryCache[path]!;
-    }
+    final cached = _thumbnailCache[path] ?? _fullPhotoCache[path];
+    if (cached != null) return cached;
+
     if (_pendingLoads.containsKey(path)) {
       return _pendingLoads[path]!;
     }
@@ -177,7 +287,7 @@ class PhotoDownloadService {
           encryptedBytes,
           masterKey,
         );
-        _memoryCache[path] = decrypted;
+        _putThumbnailInCache(path, decrypted);
         return decrypted;
       } catch (e) {
         debugPrint('Failed to decrypt photo: $e');
@@ -194,11 +304,27 @@ class PhotoDownloadService {
     }
   }
 
+  /// Clears full-resolution photo bytes when closing the viewer.
+  void clearFullPhotoCache() {
+    _fullPhotoCache.clear();
+    _signedUrlCache.clear();
+    debugPrint('Privora: Full photo memory cache cleared.');
+  }
+
   /// Clears all decrypted image bytes from memory immediately.
   /// Called when the app is locked, minimized, or the user logs out.
-  void clearMemoryCache() {
-    _memoryCache.clear();
-    _pendingLoads.clear();
+  void clearMemoryCache([String? userId]) {
+    if (userId == null) {
+      _thumbnailCache.clear();
+      _fullPhotoCache.clear();
+      _pendingLoads.clear();
+      _signedUrlCache.clear();
+    } else {
+      _thumbnailCache.removeWhere((k, _) => k.startsWith('$userId:'));
+      _fullPhotoCache.removeWhere((k, _) => k.startsWith('$userId:'));
+      _pendingLoads.removeWhere((k, _) => k.startsWith('$userId:'));
+      _signedUrlCache.removeWhere((k, _) => k.startsWith('$userId:'));
+    }
     debugPrint('Privora: In-memory decrypted photo cache cleared.');
   }
 }

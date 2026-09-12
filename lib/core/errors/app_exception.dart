@@ -82,3 +82,9 @@ class PinResetException extends AppException {
 class ValidationException extends AppException {
   const ValidationException(super.message, {super.code});
 }
+
+class ImageDecodeException extends AppException {
+  const ImageDecodeException([
+    super.message = 'The decrypted data is not a recognized image format.',
+  ]);
+}

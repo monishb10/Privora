@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -75,7 +76,18 @@ class _CapturedPhotoPreviewScreenState
         },
       );
 
+      ref
+          .read(categoryRepositoryProvider)
+          .updatePhotoCountLocally(widget.categoryId, 1);
       ref.invalidate(categoriesProvider);
+      unawaited(() async {
+        try {
+          await ref
+              .read(categoryRepositoryProvider)
+              .getCategories(user.id, forceRefresh: true);
+          ref.invalidate(categoriesProvider);
+        } catch (_) {}
+      }());
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

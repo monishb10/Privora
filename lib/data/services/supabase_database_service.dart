@@ -135,7 +135,7 @@ class SupabaseDatabaseService {
             .select('category_id')
             .eq('user_id', currentUserId)
             .isFilter('deleted_at', null)
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 10));
         for (final p in photosResponse as List<dynamic>) {
           final catId = p['category_id'] as String?;
           if (catId != null) {
